@@ -60,7 +60,7 @@
           <el-table-column prop="phone" label="联系电话" />
           <el-table-column prop="entryDate" label="入职日期" width="120" sortable />
           <el-table-column label="操作" width="250" fixed="right">
-            <template #default="{ row }">
+            <template #default "{ row }">
               <el-button size="small" @click="viewPersonnel(row)" class="view-button">详情</el-button>
               <el-button size="small" @click="editPersonnel(row)" class="edit-button">编辑</el-button>
               <el-button 
@@ -122,7 +122,7 @@
           <el-table-column prop="phone" label="联系电话" />
           <el-table-column prop="entryDate" label="入职日期" width="120" sortable />
           <el-table-column label="操作" width="250" fixed="right">
-            <template #default="{ row }">
+            <template #default "{ row }">
               <el-button size="small" @click="viewPersonnel(row)" class="view-button">详情</el-button>
               <el-button size="small" @click="editPersonnel(row)" class="edit-button">编辑</el-button>
               <el-button 
