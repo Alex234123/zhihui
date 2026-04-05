@@ -38,6 +38,37 @@
 
       <el-main class="main-content">
         <div v-if="selectedArea" class="content-wrapper">
+          <div class="statistics-panel">
+            <div class="stat-card stat-ahead">
+              <div class="stat-icon">🚀</div>
+              <div class="stat-content">
+                <div class="stat-number">{{ completionStats.ahead }}</div>
+                <div class="stat-label">超前完成</div>
+              </div>
+            </div>
+            <div class="stat-card stat-ontime">
+              <div class="stat-icon">✅</div>
+              <div class="stat-content">
+                <div class="stat-number">{{ completionStats.ontime }}</div>
+                <div class="stat-label">正常完成</div>
+              </div>
+            </div>
+            <div class="stat-card stat-overdue">
+              <div class="stat-icon">⚠️</div>
+              <div class="stat-content">
+                <div class="stat-number">{{ completionStats.overdue }}</div>
+                <div class="stat-label">超时完成</div>
+              </div>
+            </div>
+            <div class="stat-card stat-total">
+              <div class="stat-icon">📊</div>
+              <div class="stat-content">
+                <div class="stat-number">{{ completionStats.total }}</div>
+                <div class="stat-label">总节点数</div>
+              </div>
+            </div>
+          </div>
+
           <div class="page-header">
             <h2 class="page-title">{{ selectedArea.areaName }} - 进度管理</h2>
             <div class="header-actions">
@@ -187,9 +218,12 @@
           </el-col>
           <el-col :span="12">
             <el-form-item label="实际完成日期">
-              <div class="date-picker-group">
+              <div v-if="editForm.progress >= 100" class="date-picker-group">
                 <el-date-picker v-model="editForm.actualEndDate" type="date" placeholder="选择实际完成（完工后填写）" format="YYYY-MM-DD" value-format="YYYY-MM-DD" style="width: 100%" />
                 <el-button size="small" @click="setToday('actualEndDate')">今日</el-button>
+              </div>
+              <div v-else class="completion-hint">
+                <el-alert title="完成百分比达到100%后方可填写实际完成日期" type="info" :closable="false" show-icon />
               </div>
             </el-form-item>
           </el-col>
@@ -767,6 +801,29 @@ const treeProps = {
 
 const selectedArea = computed(() => areas.value.find(area => area.areaId === selectedAreaId.value))
 
+const completionStats = computed(() => {
+  if (!selectedArea.value) return { ahead: 0, ontime: 0, overdue: 0, total: 0 }
+
+  let ahead = 0
+  let ontime = 0
+  let overdue = 0
+  let total = 0
+
+  selectedArea.value.stages.forEach(stage => {
+    stage.subStages.forEach(subStage => {
+      subStage.tasks.forEach(task => {
+        total++
+        const status = computeTaskStatus(task)
+        if (status === 'completed_ahead') ahead++
+        else if (status === 'completed_ontime') ontime++
+        else if (status === 'completed_overdue') overdue++
+      })
+    })
+  })
+
+  return { ahead, ontime, overdue, total }
+})
+
 const treeData = computed(() => {
   if (!selectedArea.value) return []
   
@@ -938,7 +995,7 @@ function calculateProgress(stages) {
   let sumProgress = 0
   let completedTasks = 0
   let delayedTasks = 0
-  let latestEndDate = null
+  let estimatedCompletionDate = null
 
   stages.forEach(stage => {
     stage.subStages.forEach(subStage => {
@@ -949,23 +1006,60 @@ function calculateProgress(stages) {
 
         if (taskProgress === 100) completedTasks++
         if (task.status === 'delayed') delayedTasks++
-
-        if (task.endDate) {
-          if (!latestEndDate || new Date(task.endDate) > new Date(latestEndDate)) {
-            latestEndDate = task.endDate
-          }
-        }
       })
     })
   })
 
   const progress = totalTasks > 0 ? Math.round(sumProgress / totalTasks) : 0
 
+  for (const stage of stages) {
+    for (let i = stage.subStages.length - 1; i >= 0; i--) {
+      const subStage = stage.subStages[i]
+      for (let j = subStage.tasks.length - 1; j >= 0; j--) {
+        const task = subStage.tasks[j]
+        const taskStatus = computeTaskStatus(task)
+        if (taskStatus !== 'completed' && taskStatus !== 'completed_ontime' && taskStatus !== 'completed_ahead' && taskStatus !== 'completed_overdue') {
+          if (task.plannedEndDate) {
+            estimatedCompletionDate = task.plannedEndDate
+          }
+          return { progress, completedTasks, totalTasks, estimatedCompletionDate, delayedTasks }
+        }
+      }
+    }
+  }
+
+  if (!estimatedCompletionDate) {
+    const allCompleted = stages.every(stage =>
+      stage.subStages.every(subStage =>
+        subStage.tasks.every(task => {
+          const s = computeTaskStatus(task)
+          return ['completed', 'completed_ontime', 'completed_ahead', 'completed_overdue'].includes(s)
+        })
+      )
+    )
+
+    if (allCompleted && totalTasks > 0) {
+      let latestActualEnd = null
+      stages.forEach(stage => {
+        stage.subStages.forEach(subStage => {
+          subStage.tasks.forEach(task => {
+            if (task.actualEndDate) {
+              if (!latestActualEnd || new Date(task.actualEndDate) > new Date(latestActualEnd)) {
+                latestActualEnd = task.actualEndDate
+              }
+            }
+          })
+        })
+      })
+      estimatedCompletionDate = latestActualEnd
+    }
+  }
+
   return {
     progress,
     completedTasks,
     totalTasks,
-    estimatedCompletionDate: latestEndDate,
+    estimatedCompletionDate,
     delayedTasks
   }
 }
@@ -1407,29 +1501,63 @@ function computeTaskStatus(task) {
   const p = task.progress || 0
   const hasActualStart = !!task.actualStartDate
   const hasActualEnd = !!task.actualEndDate
+  const hasPlanStart = !!task.plannedStartDate
   const hasPlanEnd = !!task.plannedEndDate
   const today = new Date()
+  today.setHours(0, 0, 0, 0)
 
-  if (p >= 100 || hasActualEnd) return 'completed'
+  if (p >= 100 || hasActualEnd) {
+    if (hasActualEnd && hasPlanEnd) {
+      const actualEnd = new Date(task.actualEndDate)
+      const planEnd = new Date(task.plannedEndDate)
+      actualEnd.setHours(0, 0, 0, 0)
+      planEnd.setHours(0, 0, 0, 0)
+      const diffDays = Math.ceil((actualEnd - planEnd) / 86400000)
+      if (diffDays > 0) return 'completed_overdue'
+      if (diffDays < 0) return 'completed_ahead'
+      return 'completed_ontime'
+    }
+    return 'completed'
+  }
+
   if (task.status === 'paused') return 'paused'
 
-  if (p > 0 && hasActualStart) {
-    if (hasPlanEnd) {
-      const planEnd = new Date(task.plannedEndDate)
-      const daysRemaining = Math.ceil((planEnd - today) / 86400000)
+  if (hasPlanStart && hasPlanEnd) {
+    const planStart = new Date(task.plannedStartDate)
+    const planEnd = new Date(task.plannedEndDate)
+    planStart.setHours(0, 0, 0, 0)
+    planEnd.setHours(0, 0, 0, 0)
+
+    if (today < planStart) return 'not_started'
+
+    if (p > 0 && hasActualStart) {
       const totalDays = Math.max(1, dayDiff(task.plannedStartDate, task.plannedEndDate))
-      const expectedProgress = Math.min(100, Math.max(0, (1 - daysRemaining / totalDays) * 100))
-      if (p > expectedProgress + 10) return 'ahead_of_schedule'
-      if (p < expectedProgress - 10) return 'behind_schedule'
+      const elapsedDays = Math.max(0, (today - planStart) / 86400000)
+      const expectedProgress = Math.min(100, Math.round((elapsedDays / totalDays) * 100))
+      const diff = p - expectedProgress
+
+      if (diff > 10) return 'ahead_of_schedule'
+      if (diff < -10) return 'behind_schedule'
+
+      const daysRemaining = Math.ceil((planEnd - today) / 86400000)
       if (daysRemaining < 0) return 'delayed'
+      return 'in_progress'
     }
-    return 'in_progress'
+
+    if (today >= planStart) {
+      if (!hasActualStart) {
+        const daysDelayed = Math.ceil((today - planStart) / 86400000)
+        if (daysDelayed > 7) return 'delayed'
+        return 'should_start'
+      }
+      return 'in_progress'
+    }
   }
 
-  if (hasActualStart) return 'started'
-  if (task.plannedStartDate) {
+  if (hasPlanStart) {
     if (today >= new Date(task.plannedStartDate)) return 'delayed'
   }
+
   return 'not_started'
 }
 
@@ -1441,13 +1569,17 @@ function dayDiff(d1, d2) {
 function getComputedStatusColor(status) {
   const colorMap = {
     not_started: '#909399',
+    should_start: '#E6A23C',
     started: '#409EFF',
     in_progress: '#409EFF',
     ahead_of_schedule: '#67C23A',
     behind_schedule: '#E6A23C',
     delayed: '#F56C6C',
     paused: '#909399',
-    completed: '#67C23A'
+    completed: '#67C23A',
+    completed_ontime: '#67C23A',
+    completed_ahead: '#67C23A',
+    completed_overdue: '#F56C6C'
   }
   return colorMap[status] || '#909399'
 }
@@ -1455,13 +1587,17 @@ function getComputedStatusColor(status) {
 function getComputedStatusType(status) {
   const statusMap = {
     not_started: 'info',
+    should_start: 'warning',
     started: '',
     in_progress: 'primary',
     ahead_of_schedule: 'success',
     behind_schedule: 'warning',
     delayed: 'danger',
     paused: 'info',
-    completed: 'success'
+    completed: 'success',
+    completed_ontime: 'success',
+    completed_ahead: 'success',
+    completed_overdue: 'danger'
   }
   return statusMap[status] || 'info'
 }
@@ -1469,13 +1605,17 @@ function getComputedStatusType(status) {
 function getComputedStatusText(status) {
   const statusMap = {
     not_started: '未开始',
+    should_start: '应开始',
     started: '已开始',
     in_progress: '施工中',
     ahead_of_schedule: '超前',
     behind_schedule: '滞后',
     delayed: '延期',
     paused: '暂停',
-    completed: '已完成'
+    completed: '已完成',
+    completed_ontime: '正常完成',
+    completed_ahead: '超前完成',
+    completed_overdue: '超时完成'
   }
   return statusMap[status] || '未开始'
 }
@@ -1966,5 +2106,80 @@ watch(showBatchModal, (newVal) => {
   padding: 1px 6px;
   border-radius: 10px;
   margin-left: 4px;
+}
+
+.completion-hint {
+  width: 100%;
+}
+
+.completion-hint :deep(.el-alert) {
+  padding: 4px 8px;
+}
+
+.statistics-panel {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 16px;
+  margin-bottom: 24px;
+  padding: 20px;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  border-radius: 12px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+}
+
+.stat-card {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 16px;
+  background: white;
+  border-radius: 8px;
+  transition: transform 0.3s ease;
+}
+
+.stat-card:hover {
+  transform: translateY(-4px);
+}
+
+.stat-icon {
+  font-size: 32px;
+}
+
+.stat-content {
+  flex: 1;
+}
+
+.stat-number {
+  font-size: 28px;
+  font-weight: bold;
+  color: #1D2129;
+  line-height: 1.2;
+}
+
+.stat-label {
+  font-size: 13px;
+  color: #86909C;
+  margin-top: 4px;
+}
+
+.stat-ahead .stat-number { color: #67C23A; }
+.stat-ontime .stat-number { color: #409EFF; }
+.stat-overdue .stat-number { color: #F56C6C; }
+.stat-total .stat-number { color: #660099; }
+
+@media (max-width: 768px) {
+  .statistics-panel {
+    grid-template-columns: repeat(2, 1fr);
+    gap: 12px;
+    padding: 12px;
+  }
+
+  .stat-icon {
+    font-size: 24px;
+  }
+
+  .stat-number {
+    font-size: 22px;
+  }
 }
 </style>
