@@ -1,909 +1,1010 @@
+/* FileManagement.vue - 修复文件删除bug（混合类型文件删除错误）+ 改进文件ID唯一性 */
 <template>
-  <div class="file-management">
-    <!-- Page Header -->
-    <div class="page-header">
-      <div class="header-left">
-        <h2>文件管理</h2>
-        <p class="page-description">管理项目文档、图片和各类文件资源</p>
-      </div>
-      <div class="header-right">
-        <el-button type="primary" @click="showUploadDialog = true">
-          <el-icon><Plus /></el-icon>
-          上传文件
-        </el-button>
-      </div>
-    </div>
-
-    <!-- File Stats -->
-    <div class="stats-container">
-      <div class="stat-card total-files">
-        <div class="stat-icon">
-          <el-icon><Document /></el-icon>
+  <div class="file-management" :class="{ 'fade-in': isMounted }">
+    <el-tabs v-model="activeTab" class="main-tabs">
+      <el-tab-pane label="工程设计全流程核心管控文件" name="design">
+        <div class="page-header">
+          <h2>工程设计全流程核心管控文件</h2>
         </div>
-        <div class="stat-info">
-          <span class="stat-value">{{ fileTree.length }}</span>
-          <span class="stat-label">总文件数</span>
-        </div>
-      </div>
-
-      <div class="stat-card total-size">
-        <div class="stat-icon">
-          <el-icon><FolderOpened /></el-icon>
-        </div>
-        <div class="stat-info">
-          <span class="stat-value">{{ formatSize(totalFileSize) }}</span>
-          <span class="stat-label">总大小</span>
-        </div>
-      </div>
-
-      <div class="stat-card image-count">
-        <div class="stat-icon">
-          <el-icon><Picture /></el-icon>
-        </div>
-        <div class="stat-info">
-          <span class="stat-value">{{ imageCount }}</span>
-          <span class="stat-label">图片数量</span>
-        </div>
-      </div>
-
-      <div class="stat-card document-count">
-        <div class="stat-icon">
-          <el-icon><Files /></el-icon>
-        </div>
-        <div class="stat-info">
-          <span class="stat-value">{{ documentCount }}</span>
-          <span class="stat-label">文档数量</span>
-        </div>
-      </div>
-    </div>
-
-    <!-- Search & Filter -->
-    <div class="search-filter-container">
-      <el-input
-        v-model="searchText"
-        placeholder="搜索文件名..."
-        :prefix-icon="Search"
-        clearable
-        class="search-input"
-      />
-      <el-select v-model="filterType" placeholder="文件类型" clearable class="filter-select">
-        <el-option label="全部" value="" />
-        <el-option label="图片" value="image" />
-        <el-option label="文档" value="document" />
-        <el-option label="视频" value="video" />
-        <el-option label="其他" value="other" />
-      </el-select>
-    </div>
-
-    <!-- File Tree -->
-    <div class="file-tree-container">
-      <el-card class="tree-card">
-        <template #header>
-          <div class="card-header">
-            <span>文件目录</span>
-            <div class="view-toggle">
-              <el-radio-group v-model="viewMode" size="small">
-                <el-radio-button value="tree">
-                  <el-icon><List /></el-icon>
-                </el-radio-button>
-                <el-radio-button value="grid">
-                  <el-icon><Grid /></el-icon>
-                </el-radio-button>
-              </el-radio-group>
-            </div>
-          </div>
-        </template>
-
-        <!-- Tree View -->
-        <div v-if="viewMode === 'tree'" class="tree-view">
-          <el-tree
-            :data="filteredFileTree"
-            :props="treeProps"
-            node-key="id"
-            default-expand-all
-            :expand-on-click-node="false"
-            highlight-current
-            @node-click="handleNodeClick"
-          >
-            <template #default="{ node, data }">
-              <div class="tree-node" :class="{ 'is-file': !data.children }">
-                <span class="node-content">
-                  <el-icon v-if="data.children" class="node-icon folder"><Folder /></el-icon>
-                  <el-icon v-else-if="data.type === 'image'" class="node-icon image"><Picture /></el-icon>
-                  <el-icon v-else-if="data.type === 'document'" class="node-icon document"><Document /></el-icon>
-                  <el-icon v-else class="node-icon other"><Files /></el-icon>
-                  <span class="node-name">{{ data.name }}</span>
-                </span>
-                <span v-if="!data.children" class="node-meta">
-                  <span class="file-size">{{ formatSize(data.size || 0) }}</span>
-                  <span class="file-date">{{ data.uploadTime ? new Date(data.uploadTime).toLocaleDateString() : '' }}</span>
-                </span>
-              </div>
-            </template>
-          </el-tree>
-        </div>
-
-        <!-- Grid View -->
-        <div v-else class="grid-view">
-          <div class="grid-list">
-            <div 
-              v-for="item in flatFilteredFiles" 
-              :key="item.id" 
-              class="grid-item"
-              @click="previewFile(item)"
-            >
-              <div class="grid-thumbnail">
-                <el-image
-                  v-if="item.type === 'image' && item.url"
-                  :src="item.url"
-                  fit="cover"
-                  class="thumbnail-image"
-                  :preview-src-list="[item.url]"
-                  :initial-index="0"
-                />
-                <div v-else class="thumbnail-placeholder">
-                  <el-icon v-if="item.type === 'document'"><Document /></el-icon>
-                  <el-icon v-else><Files /></el-icon>
+        <el-row :gutter="20">
+          <el-col :span="24">
+            <div class="file-tree-container">
+              <div v-for="(category, index) in designCategories" :key="index" class="category-card">
+                <div class="category-header" @click="toggleCategory('design', index)">
+                  <el-icon class="category-icon"><component :is="category.icon" /></el-icon>
+                  <span class="category-title">{{ category.title }}</span>
+                  <el-icon class="expand-icon" :class="{ 'rotated': expandedDesignCategories[index] }">
+                    <ArrowRight />
+                  </el-icon>
                 </div>
-                <div class="thumbnail-actions">
-                  <el-button 
-                    v-if="isAdmin"
-                    type="danger" 
-                    size="small" 
-                    circle
-                    @click.stop="deleteFile(item)"
-                    class="delete-btn"
-                  >
-                    <el-icon><Delete /></el-icon>
-                  </el-button>
-                </div>
-              </div>
-              <div class="grid-info">
-                <span class="grid-name" :title="item.name">{{ item.name }}</span>
-                <span class="grid-meta">{{ formatSize(item.size || 0) }} · {{ item.uploadTime ? new Date(item.uploadTime).toLocaleDateString() : '' }}</span>
+                <el-collapse-transition>
+                  <div v-show="expandedDesignCategories[index]" class="category-content">
+                    <div v-for="(subCat, subIndex) in category.children" :key="subIndex" class="subcategory">
+                      <div class="subcategory-header" @click="toggleSubcategory('design', index, subIndex)">
+                        <el-icon class="subcategory-icon"><Folder /></el-icon>
+                        <span class="subcategory-title">{{ subCat.title }}</span>
+                        <el-icon class="expand-icon" :class="{ 'rotated': expandedDesignSubcategories[`${index}-${subIndex}`] }">
+                          <ArrowRight />
+                        </el-icon>
+                      </div>
+                      <el-collapse-transition>
+                        <div v-show="expandedDesignSubcategories[`${index}-${subIndex}`]" class="subcategory-content">
+                          <div v-if="subCat.children && subCat.children.length > 0">
+                            <div v-for="(item, itemIndex) in subCat.children" :key="itemIndex" class="folder-item">
+                              <div class="folder-item-header" @click="toggleFolder('design', index, subIndex, itemIndex)">
+                                <el-icon class="folder-icon"><FolderOpened /></el-icon>
+                                <span class="folder-name">{{ item.title }}</span>
+                                <el-icon class="expand-icon" :class="{ 'rotated': expandedDesignFolders[`${index}-${subIndex}-${itemIndex}`] }">
+                                  <ArrowRight />
+                                </el-icon>
+                              </div>
+                              <el-collapse-transition>
+                                <div v-show="expandedDesignFolders[`${index}-${subIndex}-${itemIndex}`]" class="folder-content">
+                                  <div v-if="item.children && item.children.length > 0">
+                                    <div v-for="(subItem, subItemIndex) in item.children" :key="subItemIndex" class="subfolder-item">
+                                      <div class="subfolder-item-header" @click="toggleSubFolder('design', index, subIndex, itemIndex, subItemIndex)">
+                                        <el-icon class="subfolder-icon"><Folder /></el-icon>
+                                        <span class="subfolder-name">{{ subItem.title }}</span>
+                                        <el-icon class="expand-icon" :class="{ 'rotated': expandedDesignSubFolders[`${index}-${subIndex}-${itemIndex}-${subItemIndex}`] }">
+                                          <ArrowRight />
+                                        </el-icon>
+                                      </div>
+                                      <el-collapse-transition>
+                                        <div v-show="expandedDesignSubFolders[`${index}-${subIndex}-${itemIndex}-${subItemIndex}`]" class="file-list">
+                                          <div v-if="subItem.files && subItem.files.length > 0">
+                                            <div v-for="(file, fileIndex) in subItem.files" :key="fileIndex" class="file-item">
+                                              <el-icon class="file-icon" :class="getFileIconClass(file.type)">
+                                                <component :is="getFileIcon(file.type)" />
+                                              </el-icon>
+                                              <span class="file-name">{{ file.name }}</span>
+                                              <span class="file-date">{{ file.date }}</span>
+                                              <div class="file-actions">
+                                                <el-button size="small" type="primary" link @click="previewFile(file)">
+                                                  <el-icon><View /></el-icon>
+                                                  预览
+                                                </el-button>
+                                                <el-button size="small" type="success" link @click="downloadFile(file)">
+                                                  <el-icon><Download /></el-icon>
+                                                  下载
+                                                </el-button>
+                                                <el-button v-if="isAdmin" size="small" type="danger" link @click="deleteFile(file, 'design', index, subIndex, itemIndex, subItemIndex)">
+                                                  <el-icon><Delete /></el-icon>
+                                                  删除
+                                                </el-button>
+                                              </div>
+                                            </div>
+                                            <div class="upload-file-btn">
+                                              <el-button size="small" type="primary" @click="showUploadDialog('design', index, subIndex, itemIndex, subItemIndex)">
+                                                <el-icon><Plus /></el-icon>
+                                                上传文件
+                                              </el-button>
+                                            </div>
+                                          </div>
+                                          <div v-else class="file-list">
+                                            <div class="upload-file-btn">
+                                              <el-button size="small" type="primary" @click="showUploadDialog('design', index, subIndex, itemIndex, subItemIndex)">
+                                                <el-icon><Plus /></el-icon>
+                                                上传文件
+                                              </el-button>
+                                            </div>
+                                          </div>
+                                        </div>
+                                      </el-collapse-transition>
+                                    </div>
+                                  </div>
+                                  <div v-else class="file-list">
+                                    <div v-if="item.files && item.files.length > 0">
+                                      <div v-for="(file, fileIndex) in item.files" :key="fileIndex" class="file-item">
+                                        <el-icon class="file-icon" :class="getFileIconClass(file.type)">
+                                          <component :is="getFileIcon(file.type)" />
+                                        </el-icon>
+                                        <span class="file-name">{{ file.name }}</span>
+                                        <span class="file-date">{{ file.date }}</span>
+                                        <div class="file-actions">
+                                          <el-button size="small" type="primary" link @click="previewFile(file)">
+                                            <el-icon><View /></el-icon>
+                                            预览
+                                          </el-button>
+                                          <el-button size="small" type="success" link @click="downloadFile(file)">
+                                            <el-icon><Download /></el-icon>
+                                            下载
+                                          </el-button>
+                                          <el-button v-if="isAdmin" size="small" type="danger" link @click="deleteFile(file, 'design', index, subIndex, itemIndex)">
+                                            <el-icon><Delete /></el-icon>
+                                            删除
+                                          </el-button>
+                                        </div>
+                                      </div>
+                                    </div>
+                                    <div class="upload-file-btn">
+                                      <el-button size="small" type="primary" @click="showUploadDialog('design', index, subIndex, itemIndex)">
+                                        <el-icon><Plus /></el-icon>
+                                        上传文件
+                                      </el-button>
+                                    </div>
+                                  </div>
+                                </div>
+                              </el-collapse-transition>
+                            </div>
+                          </div>
+                          <div v-else class="file-list">
+                            <div v-if="subCat.files && subCat.files.length > 0">
+                              <div v-for="(file, fileIndex) in subCat.files" :key="fileIndex" class="file-item">
+                                <el-icon class="file-icon" :class="getFileIconClass(file.type)">
+                                  <component :is="getFileIcon(file.type)" />
+                                </el-icon>
+                                <span class="file-name">{{ file.name }}</span>
+                                <span class="file-date">{{ file.date }}</span>
+                                <div class="file-actions">
+                                  <el-button size="small" type="primary" link @click="previewFile(file)">
+                                    <el-icon><View /></el-icon>
+                                    预览
+                                  </el-button>
+                                  <el-button size="small" type="success" link @click="downloadFile(file)">
+                                    <el-icon><Download /></el-icon>
+                                    下载
+                                  </el-button>
+                                  <el-button v-if="isAdmin" size="small" type="danger" link @click="deleteFile(file, 'design', index, subIndex)">
+                                    <el-icon><Delete /></el-icon>
+                                    删除
+                                  </el-button>
+                                </div>
+                              </div>
+                            </div>
+                            <div class="upload-file-btn">
+                              <el-button size="small" type="primary" @click="showUploadDialog('design', index, subIndex)">
+                                <el-icon><Plus /></el-icon>
+                                上传文件
+                              </el-button>
+                            </div>
+                          </div>
+                        </div>
+                      </el-collapse-transition>
+                    </div>
+                  </div>
+                </el-collapse-transition>
               </div>
             </div>
-          </div>
-          <el-empty v-if="flatFilteredFiles.length === 0" description="暂无文件" />
+          </el-col>
+        </el-row>
+      </el-tab-pane>
+      
+      <el-tab-pane label="建设单位现场成本" name="cost">
+        <div class="page-header">
+          <h2>建设单位现场成本</h2>
         </div>
-      </el-card>
-    </div>
+        <el-row :gutter="20">
+          <el-col :span="24">
+            <div class="file-tree-container">
+              <div v-for="(category, index) in costCategories" :key="index" class="category-card">
+                <div class="category-header" @click="toggleCategory('cost', index)">
+                  <el-icon class="category-icon"><component :is="category.icon" /></el-icon>
+                  <span class="category-title">{{ category.title }}</span>
+                  <el-icon class="expand-icon" :class="{ 'rotated': expandedCostCategories[index] }">
+                    <ArrowRight />
+                  </el-icon>
+                </div>
+                <el-collapse-transition>
+                  <div v-show="expandedCostCategories[index]" class="category-content">
+                    <div v-for="(subCat, subIndex) in category.children" :key="subIndex" class="subcategory">
+                      <div class="subcategory-header" @click="toggleSubcategory('cost', index, subIndex)">
+                        <el-icon class="subcategory-icon"><Folder /></el-icon>
+                        <span class="subcategory-title">{{ subCat.title }}</span>
+                        <el-icon class="expand-icon" :class="{ 'rotated': expandedCostSubcategories[`${index}-${subIndex}`] }">
+                          <ArrowRight />
+                        </el-icon>
+                      </div>
+                      <el-collapse-transition>
+                        <div v-show="expandedCostSubcategories[`${index}-${subIndex}`]" class="subcategory-content">
+                          <div v-if="subCat.children && subCat.children.length > 0">
+                            <div v-for="(item, itemIndex) in subCat.children" :key="itemIndex" class="folder-item">
+                              <div class="folder-item-header" @click="toggleFolder('cost', index, subIndex, itemIndex)">
+                                <el-icon class="folder-icon"><FolderOpened /></el-icon>
+                                <span class="folder-name">{{ item.title }}</span>
+                                <el-icon class="expand-icon" :class="{ 'rotated': expandedCostFolders[`${index}-${subIndex}-${itemIndex}`] }">
+                                  <ArrowRight />
+                                </el-icon>
+                              </div>
+                              <el-collapse-transition>
+                                <div v-show="expandedCostFolders[`${index}-${subIndex}-${itemIndex}`]" class="folder-content">
+                                  <div v-if="item.children && item.children.length > 0">
+                                    <div v-for="(subItem, subItemIndex) in item.children" :key="subItemIndex" class="subfolder-item">
+                                      <div class="subfolder-item-header" @click="toggleSubFolder('cost', index, subIndex, itemIndex, subItemIndex)">
+                                        <el-icon class="subfolder-icon"><Folder /></el-icon>
+                                        <span class="subfolder-name">{{ subItem.title }}</span>
+                                        <el-icon class="expand-icon" :class="{ 'rotated': expandedCostSubFolders[`${index}-${subIndex}-${itemIndex}-${subItemIndex}`] }">
+                                          <ArrowRight />
+                                        </el-icon>
+                                      </div>
+                                      <el-collapse-transition>
+                                        <div v-show="expandedCostSubFolders[`${index}-${subIndex}-${itemIndex}-${subItemIndex}`]" class="file-list">
+                                          <div v-if="subItem.files && subItem.files.length > 0">
+                                            <div v-for="(file, fileIndex) in subItem.files" :key="fileIndex" class="file-item">
+                                              <el-icon class="file-icon" :class="getFileIconClass(file.type)">
+                                                <component :is="getFileIcon(file.type)" />
+                                              </el-icon>
+                                              <span class="file-name">{{ file.name }}</span>
+                                              <span class="file-date">{{ file.date }}</span>
+                                              <div class="file-actions">
+                                                <el-button size="small" type="primary" link @click="previewFile(file)">
+                                                  <el-icon><View /></el-icon>
+                                                  预览
+                                                </el-button>
+                                                <el-button size="small" type="success" link @click="downloadFile(file)">
+                                                  <el-icon><Download /></el-icon>
+                                                  下载
+                                                </el-button>
+                                                <el-button v-if="isAdmin" size="small" type="danger" link @click="deleteFile(file, 'cost', index, subIndex, itemIndex, subItemIndex)">
+                                                  <el-icon><Delete /></el-icon>
+                                                  删除
+                                                </el-button>
+                                              </div>
+                                            </div>
+                                            <div class="upload-file-btn">
+                                              <el-button size="small" type="primary" @click="showUploadDialog('cost', index, subIndex, itemIndex, subItemIndex)">
+                                                <el-icon><Plus /></el-icon>
+                                                上传文件
+                                              </el-button>
+                                            </div>
+                                          </div>
+                                          <div v-else class="upload-file-btn">
+                                            <el-button size="small" type="primary" @click="showUploadDialog('cost', index, subIndex, itemIndex, subItemIndex)">
+                                              <el-icon><Plus /></el-icon>
+                                              上传文件
+                                            </el-button>
+                                          </div>
+                                        </div>
+                                      </el-collapse-transition>
+                                    </div>
+                                  </div>
+                                  <div v-else class="file-list">
+                                    <div v-if="item.files && item.files.length > 0">
+                                      <div v-for="(file, fileIndex) in item.files" :key="fileIndex" class="file-item">
+                                        <el-icon class="file-icon" :class="getFileIconClass(file.type)">
+                                          <component :is="getFileIcon(file.type)" />
+                                        </el-icon>
+                                        <span class="file-name">{{ file.name }}</span>
+                                        <span class="file-date">{{ file.date }}</span>
+                                        <div class="file-actions">
+                                          <el-button size="small" type="primary" link @click="previewFile(file)">
+                                            <el-icon><View /></el-icon>
+                                            预览
+                                          </el-button>
+                                          <el-button size="small" type="success" link @click="downloadFile(file)">
+                                            <el-icon><Download /></el-icon>
+                                            下载
+                                          </el-button>
+                                          <el-button v-if="isAdmin" size="small" type="danger" link @click="deleteFile(file, 'cost', index, subIndex, itemIndex)">
+                                            <el-icon><Delete /></el-icon>
+                                            删除
+                                          </el-button>
+                                        </div>
+                                      </div>
+                                    </div>
+                                    <div class="upload-file-btn">
+                                      <el-button size="small" type="primary" @click="showUploadDialog('cost', index, subIndex, itemIndex)">
+                                        <el-icon><Plus /></el-icon>
+                                        上传文件
+                                      </el-button>
+                                    </div>
+                                  </div>
+                                </div>
+                              </el-collapse-transition>
+                            </div>
+                          </div>
+                          <div v-else class="file-list">
+                            <div v-if="subCat.files && subCat.files.length > 0">
+                              <div v-for="(file, fileIndex) in subCat.files" :key="fileIndex" class="file-item">
+                                <el-icon class="file-icon" :class="getFileIconClass(file.type)">
+                                  <component :is="getFileIcon(file.type)" />
+                                </el-icon>
+                                <span class="file-name">{{ file.name }}</span>
+                                <span class="file-date">{{ file.date }}</span>
+                                <div class="file-actions">
+                                  <el-button size="small" type="primary" link @click="previewFile(file)">
+                                    <el-icon><View /></el-icon>
+                                    预览
+                                  </el-button>
+                                  <el-button size="small" type="success" link @click="downloadFile(file)">
+                                    <el-icon><Download /></el-icon>
+                                    下载
+                                  </el-button>
+                                  <el-button v-if="isAdmin" size="small" type="danger" link @click="deleteFile(file, 'cost', index, subIndex)">
+                                    <el-icon><Delete /></el-icon>
+                                    删除
+                                  </el-button>
+                                </div>
+                              </div>
+                            </div>
+                            <div class="upload-file-btn">
+                              <el-button size="small" type="primary" @click="showUploadDialog('cost', index, subIndex)">
+                                <el-icon><Plus /></el-icon>
+                                上传文件
+                              </el-button>
+                            </div>
+                          </div>
+                        </div>
+                      </el-collapse-transition>
+                    </div>
+                  </div>
+                </el-collapse-transition>
+              </div>
+            </div>
+          </el-col>
+        </el-row>
+      </el-tab-pane>
 
-    <!-- Upload Dialog -->
-    <el-dialog
-      v-model="showUploadDialog"
-      title="上传文件"
-      width="600px"
-      class="upload-dialog"
-    >
-      <div class="upload-area">
-        <el-upload
-          ref="uploadRef"
-          :auto-upload="false"
-          :show-file-list="true"
-          :on-change="handleFileSelect"
-          :on-remove="handleFileRemove"
-          multiple
-          drag
-          accept="*/*"
-          class="upload-component"
-        >
-          <div class="upload-placeholder">
-            <el-icon class="upload-icon"><UploadFilled /></el-icon>
-            <p class="upload-text">将文件拖到此处，或<em>点击上传</em></p>
-            <p class="upload-hint">支持所有格式，单文件最大50MB</p>
-          </div>
-        </el-upload>
+      <el-tab-pane label="监理单位文件" name="supervisor">
+        <div class="page-header">
+          <h2>监理单位文件</h2>
+        </div>
+        <el-row :gutter="20">
+          <el-col :span="24">
+            <div class="file-tree-container">
+              <div v-for="(category, index) in supervisorCategories" :key="index" class="category-card">
+                <div class="category-header" @click="toggleCategory('supervisor', index)">
+                  <el-icon class="category-icon"><component :is="category.icon" /></el-icon>
+                  <span class="category-title">{{ category.title }}</span>
+                  <el-icon class="expand-icon" :class="{ 'rotated': expandedSupervisorCategories[index] }">
+                    <ArrowRight />
+                  </el-icon>
+                </div>
+                <el-collapse-transition>
+                  <div v-show="expandedSupervisorCategories[index]" class="category-content">
+                    <div v-for="(subCat, subIndex) in category.children" :key="subIndex" class="subcategory">
+                      <div class="subcategory-header" @click="toggleSubcategory('supervisor', index, subIndex)">
+                        <el-icon class="subcategory-icon"><Folder /></el-icon>
+                        <span class="subcategory-title">{{ subCat.title }}</span>
+                        <el-icon class="expand-icon" :class="{ 'rotated': expandedSupervisorSubcategories[`${index}-${subIndex}`] }">
+                          <ArrowRight />
+                        </el-icon>
+                      </div>
+                      <el-collapse-transition>
+                        <div v-show="expandedSupervisorSubcategories[`${index}-${subIndex}`]" class="subcategory-content">
+                          <div class="file-list">
+                            <div v-if="subCat.files && subCat.files.length > 0">
+                              <div v-for="(file, fileIndex) in subCat.files" :key="fileIndex" class="file-item">
+                                <el-icon class="file-icon" :class="getFileIconClass(file.type)">
+                                  <component :is="getFileIcon(file.type)" />
+                                </el-icon>
+                                <span class="file-name">{{ file.name }}</span>
+                                <span class="file-date">{{ file.date }}</span>
+                                <div class="file-actions">
+                                  <el-button size="small" type="primary" link @click="previewFile(file)">
+                                    <el-icon><View /></el-icon>
+                                    预览
+                                  </el-button>
+                                  <el-button size="small" type="success" link @click="downloadFile(file)">
+                                    <el-icon><Download /></el-icon>
+                                    下载
+                                  </el-button>
+                                  <el-button v-if="isAdmin" size="small" type="danger" link @click="deleteFile(file, 'supervisor', index, subIndex)">
+                                    <el-icon><Delete /></el-icon>
+                                    删除
+                                  </el-button>
+                                </div>
+                              </div>
+                            </div>
+                            <div class="upload-file-btn">
+                              <el-button size="small" type="primary" @click="showUploadDialog('supervisor', index, subIndex)">
+                                <el-icon><Plus /></el-icon>
+                                上传文件
+                              </el-button>
+                            </div>
+                          </div>
+                        </div>
+                      </el-collapse-transition>
+                    </div>
+                  </div>
+                </el-collapse-transition>
+              </div>
+            </div>
+          </el-col>
+        </el-row>
+      </el-tab-pane>
+
+      <el-tab-pane label="工程亮点板块" name="highlight">
+        <div class="page-header">
+          <h2>工程亮点板块</h2>
+        </div>
+        <el-row :gutter="20">
+          <el-col :span="24">
+            <div class="file-tree-container">
+              <div v-for="(category, index) in highlightCategories" :key="index" class="category-card">
+                <div class="category-header" @click="toggleCategory('highlight', index)">
+                  <el-icon class="category-icon"><component :is="category.icon" /></el-icon>
+                  <span class="category-title">{{ category.title }}</span>
+                  <el-icon class="expand-icon" :class="{ 'rotated': expandedHighlightCategories[index] }">
+                    <ArrowRight />
+                  </el-icon>
+                </div>
+                <el-collapse-transition>
+                  <div v-show="expandedHighlightCategories[index]" class="category-content">
+                    <div v-for="(subCat, subIndex) in category.children" :key="subIndex" class="subcategory">
+                      <div class="subcategory-header" @click="toggleSubcategory('highlight', index, subIndex)">
+                        <el-icon class="subcategory-icon"><Folder /></el-icon>
+                        <span class="subcategory-title">{{ subCat.title }}</span>
+                        <el-icon class="expand-icon" :class="{ 'rotated': expandedHighlightSubcategories[`${index}-${subIndex}`] }">
+                          <ArrowRight />
+                        </el-icon>
+                      </div>
+                      <el-collapse-transition>
+                        <div v-show="expandedHighlightSubcategories[`${index}-${subIndex}`]" class="subcategory-content">
+                          <div v-if="subCat.children && subCat.children.length > 0">
+                            <div v-for="(item, itemIndex) in subCat.children" :key="itemIndex" class="folder-item">
+                              <div class="folder-item-header" @click="toggleFolder('highlight', index, subIndex, itemIndex)">
+                                <el-icon class="folder-icon"><FolderOpened /></el-icon>
+                                <span class="folder-name">{{ item.title }}</span>
+                                <el-icon class="expand-icon" :class="{ 'rotated': expandedHighlightFolders[`${index}-${subIndex}-${itemIndex}`] }">
+                                  <ArrowRight />
+                                </el-icon>
+                              </div>
+                              <el-collapse-transition>
+                                <div v-show="expandedHighlightFolders[`${index}-${subIndex}-${itemIndex}`]" class="folder-content">
+                                  <div v-if="item.children && item.children.length > 0">
+                                    <div v-for="(subItem, subItemIndex) in item.children" :key="subItemIndex" class="subfolder-item">
+                                      <div class="subfolder-item-header" @click="toggleSubFolder('highlight', index, subIndex, itemIndex, subItemIndex)">
+                                        <el-icon class="subfolder-icon"><Folder /></el-icon>
+                                        <span class="subfolder-name">{{ subItem.title }}</span>
+                                        <el-icon class="expand-icon" :class="{ 'rotated': expandedHighlightSubFolders[`${index}-${subIndex}-${itemIndex}-${subItemIndex}`] }">
+                                          <ArrowRight />
+                                        </el-icon>
+                                      </div>
+                                      <el-collapse-transition>
+                                        <div v-show="expandedHighlightSubFolders[`${index}-${subIndex}-${itemIndex}-${subItemIndex}`]" class="file-list">
+                                          <div v-if="subItem.files && subItem.files.length > 0">
+                                            <div v-for="(file, fileIndex) in subItem.files" :key="fileIndex" class="file-item">
+                                              <el-icon class="file-icon" :class="getFileIconClass(file.type)">
+                                                <component :is="getFileIcon(file.type)" />
+                                              </el-icon>
+                                              <span class="file-name">{{ file.name }}</span>
+                                              <span class="file-date">{{ file.date }}</span>
+                                              <div class="file-actions">
+                                                <el-button size="small" type="primary" link @click="previewFile(file)">
+                                                  <el-icon><View /></el-icon>
+                                                  预览
+                                                </el-button>
+                                                <el-button size="small" type="success" link @click="downloadFile(file)">
+                                                  <el-icon><Download /></el-icon>
+                                                  下载
+                                                </el-button>
+                                                <el-button v-if="isAdmin" size="small" type="danger" link @click="deleteFile(file, 'highlight', index, subIndex, itemIndex, subItemIndex)">
+                                                  <el-icon><Delete /></el-icon>
+                                                  删除
+                                                </el-button>
+                                              </div>
+                                            </div>
+                                            <div class="upload-file-btn">
+                                              <el-button size="small" type="primary" @click="showUploadDialog('highlight', index, subIndex, itemIndex, subItemIndex)">
+                                                <el-icon><Plus /></el-icon>
+                                                上传文件
+                                              </el-button>
+                                            </div>
+                                          </div>
+                                          <div v-else class="upload-file-btn">
+                                            <el-button size="small" type="primary" @click="showUploadDialog('highlight', index, subIndex, itemIndex, subItemIndex)">
+                                              <el-icon><Plus /></el-icon>
+                                              上传文件
+                                            </el-button>
+                                          </div>
+                                        </div>
+                                      </el-collapse-transition>
+                                    </div>
+                                  </div>
+                                  <div v-else class="file-list">
+                                    <div v-if="item.files && item.files.length > 0">
+                                      <div v-for="(file, fileIndex) in item.files" :key="fileIndex" class="file-item">
+                                        <el-icon class="file-icon" :class="getFileIconClass(file.type)">
+                                          <component :is="getFileIcon(file.type)" />
+                                        </el-icon>
+                                        <span class="file-name">{{ file.name }}</span>
+                                        <span class="file-date">{{ file.date }}</span>
+                                        <div class="file-actions">
+                                          <el-button size="small" type="primary" link @click="previewFile(file)">
+                                            <el-icon><View /></el-icon>
+                                            预览
+                                          </el-button>
+                                          <el-button size="small" type="success" link @click="downloadFile(file)">
+                                            <el-icon><Download /></el-icon>
+                                            下载
+                                          </el-button>
+                                          <el-button v-if="isAdmin" size="small" type="danger" link @click="deleteFile(file, 'highlight', index, subIndex, itemIndex)">
+                                            <el-icon><Delete /></el-icon>
+                                            删除
+                                          </el-button>
+                                        </div>
+                                      </div>
+                                    </div>
+                                    <div class="upload-file-btn">
+                                      <el-button size="small" type="primary" @click="showUploadDialog('highlight', index, subIndex, itemIndex)">
+                                        <el-icon><Plus /></el-icon>
+                                        上传文件
+                                      </el-button>
+                                    </div>
+                                  </div>
+                                </div>
+                              </el-collapse-transition>
+                            </div>
+                          </div>
+                          <div v-else class="file-list">
+                            <div v-if="subCat.files && subCat.files.length > 0">
+                              <div v-for="(file, fileIndex) in subCat.files" :key="fileIndex" class="file-item">
+                                <el-icon class="file-icon" :class="getFileIconClass(file.type)">
+                                  <component :is="getFileIcon(file.type)" />
+                                </el-icon>
+                                <span class="file-name">{{ file.name }}</span>
+                                <span class="file-date">{{ file.date }}</span>
+                                <div class="file-actions">
+                                  <el-button size="small" type="primary" link @click="previewFile(file)">
+                                    <el-icon><View /></el-icon>
+                                    预览
+                                  </el-button>
+                                  <el-button size="small" type="success" link @click="downloadFile(file)">
+                                    <el-icon><Download /></el-icon>
+                                    下载
+                                  </el-button>
+                                </div>
+                              </div>
+                            </div>
+                            <div class="upload-file-btn">
+                              <el-button size="small" type="primary" @click="showUploadDialog('highlight', index, subIndex)">
+                                <el-icon><Plus /></el-icon>
+                                上传文件
+                              </el-button>
+                            </div>
+                          </div>
+                        </div>
+                      </el-collapse-transition>
+                    </div>
+                  </div>
+                </el-collapse-transition>
+              </div>
+            </div>
+          </el-col>
+        </el-row>
+      </el-tab-pane>
+    </el-tabs>
+
+    <el-dialog v-model="previewDialogVisible" :title="previewFileData?.name" width="80%" class="preview-dialog">
+      <div class="preview-content" v-if="previewFileData">
+        <!-- 文件信息 -->
+        <el-descriptions :column="2" border class="preview-info">
+          <el-descriptions-item label="文件名称">{{ previewFileData.name }}</el-descriptions-item>
+          <el-descriptions-item label="文件类型">{{ previewFileData.type || getFileType(previewFileData.name) }}</el-descriptions-item>
+          <el-descriptions-item label="上传日期">{{ previewFileData.date }}</el-descriptions-item>
+          <el-descriptions-item label="文件大小">{{ previewFileData.size || '未知' }}</el-descriptions-item>
+        </el-descriptions>
+
+        <!-- 图片预览区域 -->
+        <div v-if="isImageFile(previewFileData.name)" class="image-preview-container">
+          <img 
+            :src="getFullUrl(previewFileData.url)" 
+            :alt="previewFileData.name"
+            class="preview-image"
+            @error="handleImageError"
+          />
+        </div>
+
+        <!-- 非图片文件的预览占位符 -->
+        <div v-else class="preview-placeholder">
+          <el-icon :size="80" :class="getFileIconClass(previewFileData.name)"><component :is="getFileIcon(previewFileData.name)" /></el-icon>
+          <p class="preview-text">该文件类型暂不支持在线预览</p>
+          <p class="preview-hint">支持预览：JPG、PNG、GIF、WebP 等图片格式</p>
+          <el-button type="primary" size="large" @click="downloadFile(previewFileData)">
+            <el-icon><Download /></el-icon>
+            下载文件
+          </el-button>
+        </div>
       </div>
-
-      <template #footer>
-        <el-button @click="showUploadDialog = false">取消</el-button>
-        <el-button type="primary" @click="handleUpload" :loading="uploading">
-          开始上传
-        </el-button>
-      </template>
     </el-dialog>
 
-    <!-- Preview Dialog -->
-    <el-dialog
-      v-model="showPreviewDialog"
-      :title="selectedFile?.name"
-      width="800px"
-      class="preview-dialog"
-    >
-      <div class="preview-content">
-        <el-image
-          v-if="selectedFile && selectedFile.type === 'image' && selectedFile.url"
-          :src="selectedFile.url"
-          fit="contain"
-          class="preview-image"
-          :preview-src-list="[selectedFile.url]"
-        />
-        <div v-else class="preview-file-info">
-          <el-descriptions :column="1" border>
-            <el-descriptions-item label="文件名">{{ selectedFile?.name }}</el-descriptions-item>
-            <el-descriptions-item label="类型">{{ selectedFile?.type }}</el-descriptions-item>
-            <el-descriptions-item label="大小">{{ formatSize(selectedFile?.size || 0) }}</el-descriptions-item>
-            <el-descriptions-item label="上传时间">{{ selectedFile?.uploadTime ? new Date(selectedFile.uploadTime).toLocaleString() : '' }}</el-descriptions-item>
-          </el-descriptions>
+    <el-dialog v-model="uploadDialogVisible" title="上传文件" width="500px" class="upload-dialog">
+      <el-upload
+        ref="fileInput"
+        class="upload-area"
+        drag
+        multiple
+        :auto-upload="false"
+        :on-change="handleFileChange"
+        :on-remove="handleFileRemove"
+        :file-list="currentUploadFiles.map(f => ({ name: f.name, size: f.size }))"
+      >
+        <el-icon class="el-icon--upload"><Upload /></el-icon>
+        <div class="el-upload__text">
+          将文件拖到此处，或<em>点击上传</em>
         </div>
-      </div>
+        <template #tip>
+          <div class="el-upload__tip">
+            支持 PDF、DWG、Word、Excel、图片等格式文件
+          </div>
+        </template>
+      </el-upload>
+      <template #footer>
+        <el-button @click="uploadDialogVisible = false">取消</el-button>
+        <el-button type="primary" @click="uploadFiles" :loading="uploadLoading">
+          确定上传
+        </el-button>
+      </template>
     </el-dialog>
   </div>
 </template>
 
 <script setup>
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, nextTick, watch } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import {
-  Plus,
-  Search,
   Document,
-  FolderOpened,
-  Picture,
-  Files,
   Folder,
-  List,
-  Grid,
-  Delete,
-  UploadFilled
+  FolderOpened,
+  ArrowRight,
+  View,
+  Download,
+  Files,
+  Picture,
+  Notebook,
+  Paperclip,
+  Calendar,
+  Warning,
+  CircleCheck,
+  Plus,
+  Upload,
+  Delete
 } from '@element-plus/icons-vue'
 import dataService from '../services/dataService'
 import { uploadApi } from '../api/api'
 
+const isMounted = ref(false)
+const activeTab = ref('design')
+
+// 管理员权限检查
 const isAdmin = computed(() => {
   const username = localStorage.getItem('zhihui_site_username')
   return username === '管理员' || username === 'admin'
 })
+const expandedDesignCategories = ref({})
+const expandedDesignSubcategories = ref({})
+const expandedDesignFolders = ref({})
+const expandedDesignSubFolders = ref({})
+const expandedCostCategories = ref({})
+const expandedCostSubcategories = ref({})
+const expandedCostFolders = ref({})
+const expandedCostSubFolders = ref({})
+const expandedHighlightCategories = ref({})
+const expandedHighlightSubcategories = ref({})
+const expandedHighlightFolders = ref({})
+const expandedHighlightSubFolders = ref({})
+const expandedSupervisorCategories = ref({})
+const expandedSupervisorSubcategories = ref({})
+const previewDialogVisible = ref(false)
+const previewFileData = ref(null)
+const uploadDialogVisible = ref(false)
+const uploadCategoryPath = ref('')
+const uploadSubcategoryPath = ref('')
+const currentUploadFiles = ref([])
+const uploadLoading = ref(false)
+const fileInput = ref(null)
+const currentUploadTarget = ref({ type: '', categoryIndex: -1, subIndex: -1, itemIndex: -1, subItemIndex: -1 })
 
-const fileTree = ref([])
-const searchText = ref('')
-const filterType = ref('')
-const viewMode = ref('tree')
-const showUploadDialog = ref(false)
-const showPreviewDialog = ref(false)
-const selectedFile = ref(null)
-const uploading = ref(false)
-const pendingFiles = ref([])
-const uploadRef = ref(null)
+const costCategories = ref([
+  {
+    title: '一、设计变更成本',
+    icon: Document,
+    children: [
+      { title: '1.1 设计变更申请发起', files: [] },
+      { title: '1.2 设计变更图纸出具', files: [] },
+      { title: '1.3 变更技术可行性审核', files: [] },
+      { title: '1.4 变更工程量现场核实', files: [] },
+      { title: '1.5 变更费用申报（施工单位）', files: [] },
+      { title: '1.6 变更费用监理审核', files: [] },
+      { title: '1.7 变更费用造价审核', files: [] },
+      { title: '1.8 变更费用甲方内部审批', files: [] },
+      { title: '1.9 变更工程实施与验收', files: [] },
+      { title: '1.10 变更费用进度款支付', files: [] },
+      { title: '1.11 变更费用竣工结算', files: [] },
+      { title: '1.12 设计变更台账登记', files: [] }
+    ]
+  },
+  {
+    title: '二、工程指令/甲方指令单成本',
+    icon: Document,
+    children: [
+      { title: '2.1 甲方指令单签发', files: [] },
+      { title: '2.2 指令内容现场确认', files: [] },
+      { title: '2.3 指令工程量核定', files: [] },
+      { title: '2.4 指令费用申报', files: [] },
+      { title: '2.5 指令费用监理审核', files: [] },
+      { title: '2.6 指令费用造价审核', files: [] },
+      { title: '2.7 指令费用甲方审批', files: [] },
+      { title: '2.8 指令工程实施验收', files: [] },
+      { title: '2.9 指令费用进度支付', files: [] },
+      { title: '2.10 指令费用竣工结算', files: [] },
+      { title: '2.11 工程指令单台账登记', files: [] }
+    ]
+  }
+])
+const supervisorCategories = ref([
+  { title: '监理规划与细则', icon: Document, children: [{ title: '监理规划文件', files: [] }, { title: '监理细则专项', files: [] }] },
+  { title: '监理例会与纪要', icon: Calendar, children: [{ title: '监理例会记录', files: [] }, { title: '专题会议纪要', files: [] }] },
+  { title: '监理工程师通知单', icon: Warning, children: [{ title: '质量类通知单', files: [] }, { title: '安全类通知单', files: [] }] },
+  { title: '监理月报与总结', icon: Document, children: [{ title: '监理月报', files: [] }, { title: '阶段性总结', files: [] }] },
+  { title: '施工方案审批', icon: CircleCheck, children: [{ title: '施工组织设计审批', files: [] }, { title: '专项施工方案审批', files: [] }] },
+  { title: '旁站记录与巡视', icon: View, children: [{ title: '旁站记录', files: [] }, { title: '巡视检查记录', files: [] }] }
+])
+const highlightCategories = ref([
+  {
+    title: '样板引路全流程闭环体系（样板确认书核心模块）',
+    icon: Document,
+    children: [
+      { title: '样板分级策划与全覆盖实施', children: [{ title: '工艺/实体工序/交付/精装修/安全防护样板全专业覆盖', files: [] }, { title: '样板专项策划方案、前置技术交底，明确标准与验收节点', files: [] }] },
+      { title: '样板验收与样板确认书闭环管理', children: [{ title: '四方联合验收，签署样板确认书，作为大面积施工唯一依据', files: [] }, { title: '材料同步封样留存，与样板确认书一一对应，标准可追溯', files: [] }] },
+      { title: '样板公示与技术交底落地', children: [{ title: '样板挂牌公示，明确工艺标准、责任人、确认书编号', files: [] }, { title: '样板基准全员技术交底，签字+影像双留存，未交底不开工', files: [] }] },
+      { title: '样板落地复核与奖罚联动', children: [{ title: '大面积施工样板符合性定期复核，偏离标准立即整改', files: [] }, { title: '专项奖罚制度，执行情况与班组结算、评优直接挂钩', files: [] }] }
+    ]
+  },
+  {
+    title: '全工序分级质量管控体系',
+    icon: Document,
+    children: [
+      { title: '三检制100%闭环管理', children: [{ title: '自检/互检/交接检全流程，签字台账+实测数据+影像全留存', files: [] }, { title: '质量终身责任制，责任到人到岗，未完成三检不进入下道工序', files: [] }] },
+      { title: '关键工序举牌验收制度', children: [{ title: '主体/防水/钢筋/隐蔽工程等关键工序举牌验收', files: [] }, { title: '验收影像与资料同步归档，全程可查', files: [] }] },
+      { title: '隐蔽工程影像化全追溯管控', children: [{ title: '纸质资料+电子影像双归档，覆盖隐蔽全流程', files: [] }, { title: '验收编号管理，与施工日志一一对应，杜绝虚假验收', files: [] }] },
+      { title: '旁站监理全流程管控', children: [{ title: '危大工程、关键工序全过程旁站，留存旁站记录与影像', files: [] }, { title: '全程监督工艺符合规范与样板标准', files: [] }] },
+      { title: '质量巡检与整改闭环机制', children: [{ title: '日巡检/周排查/月大检三级巡检制度，下发整改通知单', files: [] }, { title: '整改-复核-销项全闭环，质量问题100%销项', files: [] }] }
+    ]
+  },
+  {
+    title: '实测实量与分户验收全周期管控',
+    icon: Document,
+    children: [
+      { title: '全流程实测实量管控体系', children: [{ title: '专项方案全覆盖全专业，明确指标、标准、频率', files: [] }, { title: '实测数据实时上墙+数字化录入，与班组奖罚结算挂钩', files: [] }, { title: '第三方飞检复核，合格率行业领先', files: [] }] },
+      { title: '分户验收一户一验全闭环', children: [{ title: '以户为单位100%全覆盖验收，覆盖观感/功能/尺寸/防水', files: [] }, { title: '一户一档完整档案，验收合格作为竣工验收前置条件', files: [] }, { title: '交付前承接查验与品质提升', children: [{ title: '多轮模拟业主视角全维度查验，问题台账闭环整改', files: [] }, { title: '一户一验成品保护，高品质交付，业主满意度领先', files: [] }] }] }
+    ]
+  },
+  {
+    title: '材料与构配件全链条质量溯源管控',
+    icon: Document,
+    children: [
+      { title: '材料进场联合验收制度', children: [{ title: '施工/监理/建设三方联合验收，核对质保资料与封样标准', files: [] }, { title: '不合格材料严禁进场', files: [] }] },
+      { title: '见证取样与送检全闭环管理', children: [{ title: '需复检材料100%监理见证取样封样送检，影像+台账全留存', files: [] }, { title: '检测报告二维码溯源，未复检合格严禁使用', files: [] }] },
+      { title: '不合格材料退场闭环管控', children: [{ title: '不合格材料立即下达退场通知单，时限+数量明确', files: [] }, { title: '退场影像+签收台账留存，100%退场无流入风险', files: [] }] },
+      { title: '材料全流程溯源管理', children: [{ title: '数字化台账，采购-进场-验收-领用-安装全流程追溯', files: [] }, { title: '绿色/高性能/环保建材认证与应用', files: [] }] }
+    ]
+  },
+  {
+    title: '质量通病防治与创优专项管控',
+    icon: Document,
+    children: [
+      { title: '质量通病防治专项体系', children: [{ title: '通病清单+专项方案，针对性解决渗漏/开裂/空鼓等行业痛点', files: [] }, { title: '通病防治样板先行，定期复盘优化，形成工法/QC成果', files: [] }] },
+      { title: '创优创奖专项质量管控', children: [{ title: '创优专项策划，明确亮点、标准、责任分工', files: [] }, { title: '创优标准高于国标，过程创优、一次成优', files: [] }, { title: '创优资料与工程实体同步，完整规范可追溯', files: [] }] },
+      { title: '成品保护专项管控体系', children: [{ title: '全专业成品保护专项方案，分阶段针对性保护措施', files: [] }, { title: '成品保护交接检制度，损坏追责赔偿，确保成品完好', files: [] }] }
+    ]
+  },
+  {
+    title: '质量管控数字化与创新体系',
+    icon: Document,
+    children: [
+      { title: '质量追溯数字化管理', children: [{ title: '一构件一码/一户一码追溯二维码，全流程信息扫码可查', files: [] }, { title: '质量管理数字化平台，质量问题线上闭环管控', files: [] }] },
+      { title: 'BIM技术质量管控应用', children: [{ title: '图纸会审+碰撞检查，提前解决错漏碰缺，避免返工', files: [] }, { title: '复杂节点/管线综合可视化交底，提升施工精度', files: [] }] },
+      { title: '智能化质量检测应用', children: [{ title: 'AI视频监控、智能实测设备、智能监测技术应用', files: [] }, { title: '无人机航拍、三维激光扫描数字化精准验收', files: [] }] }
+    ]
+  }
+])
 
-const treeProps = {
-  children: 'children',
-  label: 'name',
-  isLeaf: (data) => !data.children
+const designCategories = ref([
+  { title: '前期设计合规与批复文件', icon: Files, children: [{ title: '方案设计文件及主管部门批复', files: [] }, { title: '初步设计文件及主管部门批复', files: [] }, { title: '初步设计概算及审批文件', files: [] }] },
+  { title: '设计出图与图纸管控文件', icon: Notebook, children: [{ title: '全套施工图设计文件', files: [] }, { title: '施工图审查合格书及整改回复', files: [] }, { title: '设计交底纪要', files: [] }, { title: '图纸会审纪要', files: [] }] },
+  { title: '过程设计变更与技术确认文件', icon: Paperclip, children: [{ title: '设计变更文件', files: [] }, { title: '设计补充说明/修改通知单', files: [] }, { title: '技术核定单', files: [] }, { title: '材料/设备代换设计确认单', files: [] }, { title: '四方签认现场洽商记录', files: [] }] },
+  { title: '参建方技术往来与管控函件', icon: Document, children: [{ title: '工作联系单', files: [] }, { title: '设计相关监理指令及回复文件', files: [] }, { title: '参建各方设计相关往来函件', files: [] }] },
+  { title: '专项与二次深化设计管控文件', icon: FolderOpened, children: [
+      { title: '专项设计图纸及审查文件', children: [{ title: '消防专项设计', files: [] }, { title: '人防专项设计', files: [] }, { title: '钢结构/幕墙专项设计', files: [] }, { title: '精装修/智能化专项设计', files: [] }, { title: '园林景观专项设计', files: [] }] },
+      { title: '二次深化设计文件', children: [{ title: '机电管线综合深化', files: [] }, { title: '支吊架系统深化', files: [] }, { title: '幕墙节点深化', files: [] }] },
+      { title: '深化设计图纸设计审核确认文件', files: [] }
+    ]
+  },
+  { title: '竣工验收与归档配套文件', icon: Files, children: [{ title: '设计单位竣工验收质量检查报告', files: [] }, { title: '竣工图设计审核签认文件', files: [] }, { title: '设计相关竣工归档全套资料', files: [] }] }
+])
+
+const toggleCategory = (type, index) => {
+  if (type === 'design') { expandedDesignCategories.value[index] = !expandedDesignCategories.value[index] }
+  else if (type === 'cost') { expandedCostCategories.value[index] = !expandedCostCategories.value[index] }
+  else if (type === 'supervisor') { expandedSupervisorCategories.value[index] = !expandedSupervisorCategories.value[index] }
+  else { expandedHighlightCategories.value[index] = !expandedHighlightCategories.value[index] }
 }
 
-const totalFileSize = computed(() => {
-  let total = 0
-  function calculateSize(items) {
-    items.forEach(item => {
-      if (item.children) {
-        calculateSize(item.children)
-      } else {
-        total += item.size || 0
-      }
-    })
-  }
-  calculateSize(fileTree.value)
-  return total
-})
-
-const imageCount = computed(() => {
-  let count = 0
-  function countImages(items) {
-    items.forEach(item => {
-      if (item.children) {
-        countImages(item.children)
-      } else if (item.type === 'image') {
-        count++
-      }
-    })
-  }
-  countImages(fileTree.value)
-  return count
-})
-
-const documentCount = computed(() => {
-  let count = 0
-  function countDocuments(items) {
-    items.forEach(item => {
-      if (item.children) {
-        countDocuments(item.children)
-      } else if (item.type === 'document' || item.type === 'other') {
-        count++
-      }
-    })
-  }
-  countDocuments(fileTree.value)
-  return count
-})
-
-const filteredFileTree = computed(() => {
-  if (!searchText.value && !filterType.value) {
-    return fileTree.value
-  }
-  
-  function filterItems(items) {
-    return items.filter(item => {
-      if (item.children) {
-        const filteredChildren = filterItems(item.children)
-        if (filteredChildren.length > 0) {
-          return { ...item, children: filteredChildren }
-        }
-        return false
-      }
-      
-      const nameMatch = !searchText.value || item.name.toLowerCase().includes(searchText.value.toLowerCase())
-      const typeMatch = !filterType.value || item.type === filterType.value
-      return nameMatch && typeMatch
-    }).map(item => {
-      if (item.children) {
-        return filterItems([item])[0]
-      }
-      return item
-    })
-  }
-  
-  return filterItems(fileTree.value)
-})
-
-const flatFilteredFiles = computed(() => {
-  let files = []
-  function flatten(items) {
-    items.forEach(item => {
-      if (item.children) {
-        flatten(item.children)
-      } else {
-        files.push(item)
-      }
-    })
-  }
-  flatten(filteredFileTree.value)
-  return files
-})
-
-function formatSize(bytes) {
-  if (!bytes || bytes === 0) return '0 B'
-  const k = 1024
-  const sizes = ['B', 'KB', 'MB', 'GB']
-  const i = Math.floor(Math.log(bytes) / Math.log(k))
-  return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i]
+const toggleSubcategory = (type, catIndex, subIndex) => {
+  const key = `${catIndex}-${subIndex}`
+  if (type === 'design') { expandedDesignSubcategories.value[key] = !expandedDesignSubcategories.value[key] }
+  else if (type === 'cost') { expandedCostSubcategories.value[key] = !expandedCostSubcategories.value[key] }
+  else if (type === 'supervisor') { expandedSupervisorSubcategories.value[key] = !expandedSupervisorSubcategories.value[key] }
+  else { expandedHighlightSubcategories.value[key] = !expandedHighlightSubcategories.value[key] }
 }
 
-function handleNodeClick(data) {
-  if (!data.children) {
-    previewFile(data)
-  }
+const toggleFolder = (type, catIndex, subIndex, itemIndex) => {
+  const key = `${catIndex}-${subIndex}-${itemIndex}`
+  if (type === 'design') { expandedDesignFolders.value[key] = !expandedDesignFolders.value[key] }
+  else if (type === 'cost') { expandedCostFolders.value[key] = !expandedCostFolders.value[key] }
+  else { expandedHighlightFolders.value[key] = !expandedHighlightFolders.value[key] }
 }
 
-async function previewFile(file) {
-  selectedFile.value = file
-  showPreviewDialog.value = true
+const toggleSubFolder = (type, catIndex, subIndex, itemIndex, subItemIndex) => {
+  const key = `${catIndex}-${subIndex}-${itemIndex}-${subItemIndex}`
+  if (type === 'design') { expandedDesignSubFolders.value[key] = !expandedDesignSubFolders.value[key] }
+  else if (type === 'cost') { expandedCostSubFolders.value[key] = !expandedCostSubFolders.value[key] }
+  else { expandedHighlightSubFolders.value[key] = !expandedHighlightSubFolders.value[key] }
 }
 
-function handleFileSelect(uploadFile) {
-  pendingFiles.value.push(uploadFile.raw)
+const getFileIcon = (typeOrFilename) => {
+  let type = typeOrFilename
+  if (typeof typeOrFilename === 'string' && typeOrFilename.includes('.')) { type = getFileType(typeOrFilename) }
+  const iconMap = { pdf: Document, dwg: Notebook, dxf: Notebook, word: Document, excel: Document, ppt: Document, image: Picture, video: Picture, audio: Picture, archive: Document, document: Document }
+  return iconMap[type] || Document
 }
 
-function handleFileRemove(uploadFile) {
-  const index = pendingFiles.value.findIndex(f => f.uid === uploadFile.raw.uid)
-  if (index !== -1) {
-    pendingFiles.value.splice(index, 1)
-  }
+const getFileIconClass = (typeOrFilename) => {
+  let type = typeOrFilename
+  if (typeof typeOrFilename === 'string' && typeOrFilename.includes('.')) { type = getFileType(typeOrFilename) }
+  const classMap = { pdf: 'pdf-icon', dwg: 'dwg-icon', dxf: 'dwg-icon', word: 'word-icon', excel: 'excel-icon', ppt: 'ppt-icon', image: 'image-icon', video: 'video-icon', audio: 'audio-icon', archive: 'archive-icon', document: 'document-icon' }
+  return classMap[type] || 'document-icon'
 }
 
-async function handleUpload() {
-  if (pendingFiles.value.length === 0) {
-    ElMessage.warning('请选择要上传的文件')
-    return
-  }
-  
-  uploading.value = true
-  
+const previewFile = (file) => {
+  if (!file || !file.url) { ElMessage.warning('文件信息不完整，无法预览'); return }
+  previewFileData.value = file
+  previewDialogVisible.value = true
+}
+
+const downloadFile = async (file) => {
+  if (!file || !file.url) { ElMessage.error('文件下载链接无效'); return }
   try {
-    for (const file of pendingFiles.value) {
-      const reader = new FileReader()
-      const base64Data = await new Promise((resolve, reject) => {
-        reader.onload = () => resolve(reader.result)
-        reader.onerror = reject
-        reader.readAsDataURL(file)
-      })
-      
-      const result = await uploadApi.uploadImage(base64Data, file.name)
-      
-      const fileType = file.type.startsWith('image/') ? 'image' :
-                       file.type.includes('pdf') || file.type.includes('word') || file.type.includes('excel') ? 'document' :
-                       file.type.startsWith('video/') ? 'video' : 'other'
-      
-      const newFile = {
-        id: `file-${Date.now().toString(36)}-${Math.random().toString(36).substring(2, 8)}`,
-        name: file.name,
-        url: result.url,
-        type: fileType,
-        size: file.size,
-        uploadTime: new Date().toISOString(),
-        uploader: localStorage.getItem('zhihui_site_username') || 'unknown'
-      }
-      
-      fileTree.value.push(newFile)
-    }
-    
-    await dataService.set('fileManagement', fileTree.value)
-    
-    pendingFiles.value = []
-    if (uploadRef.value) {
-      uploadRef.value.clearFiles()
-    }
-    showUploadDialog.value = false
-    
-    ElMessage.success(`成功上传 ${pendingFiles.value.length} 个文件`)
-  } catch (error) {
-    console.error('Upload error:', error)
-    ElMessage.error('上传失败：' + (error.message || '未知错误'))
-  } finally {
-    uploading.value = false
-  }
+    ElMessage.info(`正在准备下载: ${file.name}...`)
+    const baseUrl = window.location.origin
+    const downloadUrl = `${baseUrl}${file.url}`
+    const link = document.createElement('a')
+    link.href = downloadUrl
+    link.download = file.name || 'download'
+    link.target = '_blank'
+    link.style.display = 'none'
+    document.body.appendChild(link)
+    link.click()
+    setTimeout(() => { document.body.removeChild(link) }, 100)
+    ElMessage.success(`开始下载: ${file.name}`)
+  } catch (error) { console.error('[FileManagement] Download error:', error); ElMessage.error('下载失败，请重试') }
 }
 
-async function deleteFile(file) {
+const isImageFile = (filename) => {
+  if (!filename) return false
+  const ext = filename.split('.').pop().toLowerCase()
+  const imageExts = ['jpg', 'jpeg', 'png', 'gif', 'webp', 'svg', 'bmp', 'ico']
+  return imageExts.includes(ext)
+}
+
+const getFullUrl = (url) => {
+  if (!url) return ''
+  if (url.startsWith('http://') || url.startsWith('https://')) return url
+  return `${window.location.origin}${url}`
+}
+
+const handleImageError = (e) => {
+  console.warn('[FileManagement] Image load error:', e.target.src)
+  e.target.alt = '图片加载失败'
+  e.target.style.display = 'none'
+}
+
+const deleteFile = async (file, type, categoryIndex, subIndex, itemIndex = -1, subItemIndex = -1) => {
+  if (!isAdmin.value) { ElMessage.warning('只有管理员可以删除文件'); return }
   try {
-    await ElMessageBox.confirm(
-      `确定要删除文件 "${file.name}" 吗？`,
-      '确认删除',
-      { confirmButtonText: '确定删除', cancelButtonText: '取消', type: 'warning' }
-    )
-    
+    await ElMessageBox.confirm(`确定要删除文件 "${file.name}" 吗？此操作不可恢复。`, '确认删除', { confirmButtonText: '确定删除', cancelButtonText: '取消', type: 'warning', confirmButtonClass: 'el-button--danger' })
+    const targetArray = getTargetArray(type, categoryIndex, subIndex, itemIndex, subItemIndex)
+    if (targetArray) {
+      const fileIndex = targetArray.findIndex(f => f.id === file.id)
+      if (fileIndex > -1) {
+        const removedFile = targetArray[fileIndex]
+        targetArray.splice(fileIndex, 1)
+        console.log(`[FileManagement] Removed file metadata: ${removedFile.name} (id: ${removedFile.id})`)
+      } else {
+        console.warn('[FileManagement] File not found by id, trying name+url fallback:', file.name)
+        const fallbackIndex = targetArray.findIndex(f => f.name === file.name && f.url === file.url)
+        if (fallbackIndex > -1) { targetArray.splice(fallbackIndex, 1); console.log(`[FileManagement] Removed file via fallback: ${file.name}`) }
+        else { ElMessage.warning('未找到该文件记录'); return }
+      }
+    } else { ElMessage.error('无法定位文件所在位置'); return }
     if (file.url) {
-      try {
-        const urlParts = file.url.split('/')
-        const filename = urlParts[urlParts.length - 1]
-        await uploadApi.deleteImage(filename)
-        console.log(`[FileManagement] Server file deleted: ${filename}`)
-      } catch (deleteError) {
-        console.warn('[FileManagement] Server file deletion failed:', deleteError)
-      }
+      try { const urlParts = file.url.split('/'); const filename = urlParts[urlParts.length - 1]; await uploadApi.deleteImage(filename); console.log(`[FileManagement] Server file deleted: ${filename}`) }
+      catch (deleteErr) { console.warn('[FileManagement] Server file deletion failed:', deleteErr) }
     }
-    
-    const index = fileTree.value.findIndex(f => f.id === file.id)
-    if (index !== -1) {
-      fileTree.value.splice(index, 1)
-    }
-    
-    await dataService.set('fileManagement', fileTree.value)
-    
-    ElMessage.success('文件已删除')
-    console.log(`[FileManagement] File deleted: ${file.id} - ${file.name}`)
-  } catch (error) {
-    if (error !== 'cancel') {
-      console.error('[FileManagement] Delete error:', error)
-      ElMessage.error('删除失败：' + (error.message || '未知错误'))
-    }
-  }
+    await saveFileData()
+    ElMessage.success(`文件 "${file.name}" 已删除`)
+  } catch (error) { if (error !== 'cancel') { console.error('[FileManagement] Delete error:', error); ElMessage.error('删除失败：' + (error.message || '未知错误')) } }
 }
 
-onMounted(async () => {
+const showUploadDialog = (type, categoryIndex, subIndex, itemIndex = -1, subItemIndex = -1) => {
+  currentUploadTarget.value = { type, categoryIndex, subIndex, itemIndex, subItemIndex }
+  currentUploadFiles.value = []
+  uploadDialogVisible.value = true
+}
+
+const handleFileChange = (file) => { currentUploadFiles.value.push(file.raw); return false }
+const handleFileRemove = (file) => { const index = currentUploadFiles.value.findIndex(f => f.name === file.name); if (index > -1) currentUploadFiles.value.splice(index, 1) }
+
+const uploadFiles = async () => {
+  if (currentUploadFiles.value.length === 0) { ElMessage.warning('请选择要上传的文件'); return }
+  uploadLoading.value = true
+  let successCount = 0, failCount = 0
+  const { type, categoryIndex, subIndex, itemIndex, subItemIndex } = currentUploadTarget.value
+  for (const file of currentUploadFiles.value) {
+    try {
+      const reader = new FileReader()
+      const fileContent = await new Promise((resolve, reject) => { reader.onload = (e) => resolve(e.target.result); reader.onerror = reject; reader.readAsDataURL(file.raw) })
+      const response = await fetch('/api/upload', { method: 'POST', headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${localStorage.getItem('zhihui_site_token')}` }, body: JSON.stringify({ image: fileContent, filename: file.name, category }) })
+      if (!response.ok) throw new Error((await response.json()).message || '上传失败')
+      const result = await response.json()
+      const newFile = { id: 'f_' + Date.now().toString(36) + '_' + Math.random().toString(36).substring(2, 10) + '_' + Math.random().toString(36).substring(2, 6), name: file.name, type: getFileType(file.name), date: new Date().toLocaleDateString(), url: result.url, size: formatFileSize(file.size) }
+      let targetArray
+      if (subItemIndex >= 0) targetArray = getTargetArray(type, categoryIndex, subIndex, itemIndex, subItemIndex)
+      else if (itemIndex >= 0) targetArray = getTargetArray(type, categoryIndex, subIndex, itemIndex)
+      else targetArray = getTargetArray(type, categoryIndex, subIndex)
+      if (targetArray) targetArray.push(newFile)
+      successCount++
+    } catch (error) { console.error('上传文件失败:', error); failCount++ }
+  }
+  uploadLoading.value = false; uploadDialogVisible.value = false; currentUploadFiles.value = []
+  if (successCount > 0) { await saveFileData(); failCount === 0 ? ElMessage.success(`成功上传 ${successCount} 个文件，已同步到服务器`) : ElMessage.warning(`成功 ${successCount} 个，失败 ${failCount} 个`) }
+  else { ElMessage.error('所有文件上传失败，请重试') }
+}
+
+const getTargetArray = (type, categoryIndex, subIndex, itemIndex = -1, subItemIndex = -1) => {
+  let categories
+  switch (type) { case 'design': categories = designCategories.value; break; case 'cost': categories = costCategories.value; break; case 'supervisor': categories = supervisorCategories.value; break; case 'highlight': categories = highlightCategories.value; break; default: return null }
+  if (subItemIndex >= 0) { if (!categories[categoryIndex].children[subIndex].children[itemIndex].children[subItemIndex].files) categories[categoryIndex].children[subIndex].children[itemIndex].children[subItemIndex].files = []; return categories[categoryIndex].children[subIndex].children[itemIndex].children[subItemIndex].files }
+  else if (itemIndex >= 0) { if (!categories[categoryIndex].children[subIndex].children[itemIndex].files) categories[categoryIndex].children[subIndex].children[itemIndex].files = []; return categories[categoryIndex].children[subIndex].children[itemIndex].files }
+  else { if (!categories[categoryIndex].children[subIndex].files) categories[categoryIndex].children[subIndex].files = []; return categories[categoryIndex].children[subIndex].files }
+}
+
+const getFileType = (filename) => {
+  const ext = filename.split('.').pop().toLowerCase()
+  const typeMap = { pdf: 'pdf', dwg: 'dwg', doc: 'word', docx: 'word', xls: 'excel', xlsx: 'excel', jpg: 'image', jpeg: 'image', png: 'image', gif: 'image' }
+  return typeMap[ext] || 'document'
+}
+
+const formatFileSize = (bytes) => { if (bytes < 1024) return bytes + ' B'; if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(2) + ' KB'; return (bytes / (1024 * 1024)).toFixed(2) + ' MB' }
+
+const saveFileData = async () => {
+  try { const fileData = { design: designCategories.value, cost: costCategories.value, supervisor: supervisorCategories.value, highlight: highlightCategories.value, lastUpdated: new Date().toISOString() }; await dataService.set('fileManagement', fileData) }
+  catch (error) { console.error('[FileManagement] 保存文件数据失败:', error) }
+}
+
+const loadFileData = async () => {
+  try { const savedData = await dataService.get('fileManagement', null); if (savedData && savedData.design && savedData.design.length > 0) { designCategories.value = savedData.design; costCategories.value = savedData.cost || costCategories.value; supervisorCategories.value = savedData.supervisor || supervisorCategories.value; highlightCategories.value = savedData.highlight || highlightCategories.value; ElMessage.success('已从服务器同步文件数据') } }
+  catch (error) { console.error('[FileManagement] 加载文件数据失败:', error) }
+}
+
+let saveTimeout = null
+watch([designCategories, costCategories, supervisorCategories, highlightCategories], () => { if (saveTimeout) clearTimeout(saveTimeout); saveTimeout = setTimeout(() => { saveFileData() }, 1000) }, { deep: true })
+
+onMounted(async () => { nextTick(() => { isMounted.value = true }); await loadFileData(); setTimeout(() => { checkAndCleanInvalidFilesInManagement() }, 2000) })
+
+const checkAndCleanInvalidFilesInManagement = async () => {
+  console.log('[FileManagement] Starting file integrity check...')
   try {
-    const savedFiles = await dataService.get('fileManagement', [])
-    if (savedFiles && Array.isArray(savedFiles)) {
-      fileTree.value = savedFiles
-    } else {
-      fileTree.value = []
-    }
-  } catch (error) {
-    console.error('[FileManagement] Load error:', error)
-    fileTree.value = []
-  }
-})
+    const urlsToCheck = [], collectUrls = (categories) => { categories.forEach(cat => { if (cat.files) cat.files.forEach(file => { if (file.url) urlsToCheck.push(file.url) }); if (cat.children) collectUrls(cat.children) }) }
+    collectUrls(designCategories.value); collectUrls(costCategories.value)
+    supervisorCategories.value.forEach(cat => { if (cat.children) cat.children.forEach(subCat => { if (subCat.files) subCat.files.forEach(file => { if (file.url) urlsToCheck.push(file.url) }) }) })
+    highlightCategories.value.forEach(cat => { if (cat.children) cat.children.forEach(subCat => { if (subCat.children) { subCat.children.forEach(item => { if (item.files) item.files.forEach(file => { if (file.url) urlsToCheck.push(file.url) }); if (item.children) item.children.forEach(child => { if (child.files) child.files.forEach(file => { if (file.url) urlsToCheck.push(file.url) }) }) }); if (subCat.files) subCat.files.forEach(file => { if (file.url) urlsToCheck.push(file.url) }) } }) })
+    if (urlsToCheck.length === 0) { console.log('[FileManagement] No files to check'); return }
+    const token = localStorage.getItem('zhihui_site_token')
+    const response = await fetch('/api/check-files-exist', { method: 'POST', headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` }, body: JSON.stringify({ urls: urlsToCheck }) })
+    if (!response.ok) { console.warn('[FileManagement] File check API failed:', response.status); return }
+    const result = await response.json(); if (!result.success || !result.results) return
+    const invalidUrls = Object.entries(result.results).filter(([url, data]) => !data.exists).map(([url]) => url)
+    if (invalidUrls.length > 0) {
+      console.warn(`[FileManagement] Found ${invalidUrls.length} invalid files, cleaning up...`)
+      let totalCleaned = 0
+      designCategories.value.forEach(cat => { if (cat.subcategories) cat.subcategories.forEach(subCat => { if (subCat.files) { const { cleaned, changed } = cleanInvalidFromArray(subCat.files); if (changed) { subCat.files = cleaned; totalCleaned += changed } }; if (subCat.items) subCat.items.forEach(item => { if (item.files) { const { cleaned, changed } = cleanInvalidFromArray(item.files); if (changed) { item.files = cleaned; totalCleaned += changed } }; if (item.children) item.children.forEach(child => { if (child.files) { const { cleaned, changed } = cleanInvalidFromArray(child.files); if (changed) { child.files = cleaned; totalCleaned += changed } } }) }) }) })
+      costCategories.value.forEach(cat => { if (cat.subcategories) cat.subcategories.forEach(subCat => { if (subCat.files) { const { cleaned, changed } = cleanInvalidFromArray(subCat.files); if (changed) { subCat.files = cleaned; totalCleaned += changed } }; if (subCat.items) subCat.items.forEach(item => { if (item.files) { const { cleaned, changed } = cleanInvalidFromArray(item.files); if (changed) { item.files = cleaned; totalCleaned += changed } } }) }) })
+      if (totalCleaned > 0) { await saveFileData(); console.log(`[FileManagement] Cleaned ${totalCleaned} invalid files`); ElMessage.warning(`已自动清理 ${totalCleaned} 个失效文件记录`) }
+    } else { console.log('[FileManagement] All files are valid ✓') }
+  } catch (error) { console.error('[FileManagement] File integrity check error:', error) }
+}
+
+const cleanInvalidFromArray = (arr) => { const beforeLength = arr.length; const cleaned = arr.filter(item => !item.url || !invalidUrls.includes(item.url)); return { cleaned, changed: cleaned.length !== beforeLength } }
 </script>
-
-<style scoped>
-.file-management {
-  padding: 24px;
-  background: rgba(255, 255, 255, 0.95);
-  border-radius: 12px;
-  min-height: calc(100vh - 200px);
-}
-
-.page-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 24px;
-  padding: 20px;
-  background: linear-gradient(135deg, rgba(102, 0, 153, 0.05), rgba(102, 0, 153, 0.02));
-  border-radius: 16px;
-  border: 1px solid rgba(102, 0, 153, 0.08);
-}
-
-.header-left h2 {
-  font-size: 28px;
-  font-weight: 700;
-  color: #1D2129;
-  margin: 0 0 8px 0;
-  font-family: 'Noto Sans SC', 'Microsoft YaHei', Arial, sans-serif;
-}
-
-.page-description {
-  font-size: 14px;
-  color: #86909C;
-  margin: 0;
-}
-
-.stats-container {
-  display: grid;
-  grid-template-columns: repeat(4, 1fr);
-  gap: 20px;
-  margin-bottom: 24px;
-}
-
-.stat-card {
-  display: flex;
-  align-items: center;
-  gap: 16px;
-  padding: 20px;
-  background: linear-gradient(135deg, rgba(255, 255, 255, 0.9), rgba(245, 247, 250, 0.9));
-  border-radius: 16px;
-  border: 1px solid rgba(77, 20, 140, 0.1);
-  box-shadow: 0 4px 16px rgba(102, 126, 234, 0.08);
-  transition: all 0.3s ease;
-}
-
-.stat-card:hover {
-  transform: translateY(-4px);
-  box-shadow: 0 8px 24px rgba(102, 0, 153, 0.15);
-  border-color: rgba(102, 0, 153, 0.2);
-}
-
-.stat-icon {
-  width: 48px;
-  height: 48px;
-  border-radius: 12px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 22px;
-  color: white;
-  background: var(--future-primary);
-  box-shadow: 0 4px 12px rgba(102, 0, 153, 0.25);
-}
-
-.stat-info {
-  display: flex;
-  flex-direction: column;
-}
-
-.stat-value {
-  font-size: 24px;
-  font-weight: 700;
-  color: #1D2129;
-  font-family: 'Noto Sans SC', 'Microsoft YaHei', Arial, sans-serif;
-}
-
-.stat-label {
-  font-size: 13px;
-  color: #86909C;
-  font-family: 'Noto Sans SC', 'Microsoft YaHei', Arial, sans-serif;
-}
-
-.search-filter-container {
-  display: flex;
-  gap: 16px;
-  margin-bottom: 24px;
-}
-
-.search-input {
-  flex: 1;
-}
-
-.filter-select {
-  width: 160px;
-}
-
-.file-tree-container {
-  margin-bottom: 24px;
-}
-
-.tree-card {
-  min-height: 400px;
-  background: linear-gradient(135deg, rgba(255, 255, 255, 0.95), rgba(250, 251, 252, 0.95));
-  border-radius: 16px;
-  border: 1px solid rgba(77, 20, 140, 0.1);
-  box-shadow: 0 8px 32px rgba(102, 0, 153, 0.1);
-}
-
-.card-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  font-weight: 600;
-  color: #1D2129;
-  font-family: 'Noto Sans SC', 'Microsoft YaHei', Arial, sans-serif;
-}
-
-.view-toggle {
-  display: flex;
-  gap: 8px;
-}
-
-.tree-view {
-  padding: 16px;
-  max-height: 500px;
-  overflow-y: auto;
-}
-
-.grid-view {
-  padding: 16px;
-  max-height: 500px;
-  overflow-y: auto;
-}
-
-.tree-node {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  width: 100%;
-  padding: 6px 0;
-}
-
-.tree-node.is-file:hover .delete-btn {
-  opacity: 1;
-}
-
-.node-content {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  flex: 1;
-}
-
-.node-icon {
-  font-size: 18px;
-  transition: all 0.2s ease;
-}
-
-.node-icon.folder {
-  color: #FFA940;
-}
-
-.node-icon.image {
-  color: #165DFF;
-}
-
-.node-icon.document {
-  color: #660099;
-}
-
-.node-icon.other {
-  color: #86909C;
-}
-
-.node-name {
-  font-size: 14px;
-  color: #1D2129;
-  font-weight: 500;
-  font-family: 'Noto Sans SC', 'Microsoft YaHei', Arial, sans-serif;
-}
-
-.node-meta {
-  display: flex;
-  gap: 16px;
-  font-size: 12px;
-  color: #86909C;
-  flex-shrink: 0;
-}
-
-.file-size {
-  font-weight: 500;
-}
-
-.grid-list {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
-  gap: 16px;
-}
-
-.grid-item {
-  cursor: pointer;
-  border-radius: 12px;
-  overflow: hidden;
-  border: 2px solid transparent;
-  transition: all 0.3s ease;
-  background: white;
-  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.06);
-}
-
-.grid-item:hover {
-  transform: translateY(-6px) scale(1.02);
-  border-color: var(--future-primary);
-  box-shadow: 0 12px 28px rgba(102, 0, 153, 0.18);
-}
-
-.grid-thumbnail {
-  position: relative;
-  aspect-ratio: 1;
-  overflow: hidden;
-  background: #f5f5f5;
-}
-
-.thumbnail-image {
-  width: 100%;
-  height: 100%;
-}
-
-.thumbnail-placeholder {
-  width: 100%;
-  height: 100%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 40px;
-  color: #ccc;
-}
-
-.thumbnail-actions {
-  position: absolute;
-  top: 8px;
-  right: 8px;
-  opacity: 0;
-  transition: opacity 0.2s ease;
-}
-
-.grid-item:hover .thumbnail-actions {
-  opacity: 1;
-}
-
-.delete-btn {
-  transform: scale(0.85);
-}
-
-.grid-info {
-  padding: 12px;
-  text-align: center;
-}
-
-.grid-name {
-  display: block;
-  font-size: 13px;
-  color: #1D2129;
-  font-weight: 500;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  margin-bottom: 4px;
-}
-
-.grid-meta {
-  font-size: 11px;
-  color: #86909C;
-}
-
-.upload-dialog {
-  --el-dialog-bg-color: rgba(255, 255, 255, 0.98);
-  --el-dialog-border-color: rgba(77, 20, 140, 0.2);
-  border-radius: 16px;
-  backdrop-filter: blur(30px);
-  box-shadow: 0 20px 60px rgba(102, 0, 153, 0.3);
-}
-
-.upload-area {
-  padding: 20px 0;
-}
-
-.upload-component {
-  width: 100%;
-}
-
-.upload-component :deep(.el-upload-dragger) {
-  border: 2px dashed rgba(102, 0, 153, 0.3);
-  border-radius: 16px;
-  background: linear-gradient(135deg, rgba(102, 0, 153, 0.03), rgba(102, 0, 153, 0.01));
-  transition: all 0.3s ease;
-}
-
-.upload-component :deep(.el-upload-dragger:hover) {
-  border-color: var(--future-primary);
-  background: linear-gradient(135deg, rgba(102, 0, 153, 0.06), rgba(102, 0, 153, 0.03));
-}
-
-.upload-placeholder {
-  padding: 40px 20px;
-  text-align: center;
-}
-
-.upload-icon {
-  font-size: 56px;
-  color: rgba(102, 0, 153, 0.35);
-  margin-bottom: 12px;
-}
-
-.upload-text {
-  font-size: 16px;
-  color: #4E5969;
-  margin: 0 0 8px 0;
-}
-
-.upload-text em {
-  color: var(--future-primary);
-  font-style: normal;
-  font-weight: 600;
-}
-
-.upload-hint {
-  font-size: 13px;
-  color: #86909C;
-  margin: 0;
-}
-
-.preview-dialog {
-  --el-dialog-bg-color: rgba(255, 255, 255, 0.98);
-  --el-dialog-border-color: rgba(77, 20, 140, 0.2);
-  border-radius: 16px;
-  backdrop-filter: blur(30px);
-  box-shadow: 0 20px 60px rgba(102, 0, 153, 0.3);
-}
-
-.preview-content {
-  text-align: center;
-}
-
-.preview-image {
-  max-width: 100%;
-  max-height: 70vh;
-  border-radius: 12px;
-}
-
-.preview-file-info {
-  padding: 20px;
-}
-
-@media (max-width: 1200px) {
-  .stats-container {
-    grid-template-columns: repeat(2, 1fr);
-  }
-}
-
-@media (max-width: 768px) {
-  .stats-container {
-    grid-template-columns: repeat(2, 1fr);
-    gap: 12px;
-  }
-
-  .stat-card {
-    padding: 14px;
-    gap: 12px;
-  }
-
-  .stat-icon {
-    width: 40px;
-  height: 40px;
-    font-size: 18px;
-  }
-
-  .stat-value {
-    font-size: 20px;
-  }
-
-  .search-filter-container {
-    flex-direction: column;
-  }
-
-  .filter-select {
-    width: 100%;
-  }
-
-  .grid-list {
-    grid-template-columns: repeat(2, 1fr);
-    gap: 12px;
-  }
-}
-
-@media (max-width: 480px) {
-  .stats-container {
-    grid-template-columns: 1fr;
-  }
-
-  .grid-list {
-    grid-template-columns: 1fr;
-  }
-}
-</style>
