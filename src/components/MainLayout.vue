@@ -93,8 +93,8 @@
             <SafetyInspection v-if="activeMenu === 'safety'" :action="navigateAction" />
             <ProgressManagement v-if="activeMenu === 'progress'" :action="navigateAction" />
             <MaterialManagement v-if="activeMenu === 'materials'" :action="navigateAction" />
-            <FileManagement v-if="activeMenu === 'files"" />
-            <MajorEvents v-if="activeMenu === 'events"" />
+            <FileManagement v-if="activeMenu === 'files'" />
+            <MajorEvents v-if="activeMenu === 'events'" />
             <QualityManagement v-if="activeMenu === 'quality'" />
             <SystemInfo v-if="activeMenu === 'system'" />
             <BugFeedback v-if="activeMenu === 'feedback'" />
@@ -233,19 +233,24 @@ const logout = () => {
   try {
     const userName = localStorage.getItem('zhihui_site_username') || '未知用户'
     
+    // 清除登录状态
     localStorage.removeItem('zhihui_site_logged_in')
     localStorage.removeItem('zhihui_site_username')
     localStorage.removeItem('zhihui_site_userid')
     
+    // 关闭下拉菜单
     dropdownVisible.value = false
     try {
       document.removeEventListener('click', closeDropdown)
     } catch (e) {
+      // 忽略错误
     }
     
+    // 跳转到登录页面
     ElMessage.success('已成功退出登录')
     router.push('/login')
     
+    // 异步记录退出登录日志（不阻塞主流程）
     setTimeout(() => {
       addLog(`${userName} 退出登录`, 'info', {
         user: userName,
@@ -342,6 +347,7 @@ onUnmounted(() => {
   z-index: 1;
   overflow: hidden;
 }
+
 
 
 
@@ -714,6 +720,7 @@ onUnmounted(() => {
   min-height: calc(100vh - 200px);
 }
 
+/* 减少动画偏好支持 */
 @media (prefers-reduced-motion: reduce) {
   .fade-enter-active,
   .fade-leave-active,
@@ -733,6 +740,7 @@ onUnmounted(() => {
     transform: none;
   }
 }
+
 
 
 @media (max-width: 1200px) {

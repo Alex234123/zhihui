@@ -613,6 +613,47 @@ onUnmounted(() => {
     inset 0 -1px 0 rgba(0, 0, 0, 0.1);
 }
 
+.dock-tooltip {
+  position: absolute;
+  bottom: 100%;
+  left: 50%;
+  transform: translateX(-50%);
+  margin-bottom: 12px;
+  padding: 6px 14px;
+  background: rgba(0, 0, 0, 0.75);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  color: #FFFFFF;
+  font-size: 13px;
+  font-weight: 500;
+  border-radius: 8px;
+  white-space: nowrap;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+  animation: tooltipFadeIn 0.2s ease-out;
+  pointer-events: none;
+}
+
+.dock-tooltip::after {
+  content: '';
+  position: absolute;
+  top: 100%;
+  left: 50%;
+  transform: translateX(-50%);
+  border: 6px solid transparent;
+  border-top-color: rgba(0, 0, 0, 0.75);
+}
+
+@keyframes tooltipFadeIn {
+  from {
+    opacity: 0;
+    transform: translateX(-50%) translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(-50%) translateY(0);
+  }
+}
+
 @media (max-width: 768px) {
   .dock-container {
     bottom: 12px;
@@ -641,6 +682,10 @@ onUnmounted(() => {
 
   .dock-item {
     min-width: 60px;
+  }
+
+  .dock-tooltip {
+    display: none;
   }
 }
 

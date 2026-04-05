@@ -363,6 +363,7 @@ import {
   Plus,
   Document
 } from '@element-plus/icons-vue'
+import { setItem, getItem } from '../utils/storage'
 import dataService from '../services/dataService'
 import { constructionNodes, getLeafNodes } from '../data/constructionNodes'
 
@@ -525,6 +526,13 @@ function getAreaStatusText(block) {
   if (progress === 100) return '已完成'
   if (progress > 0) return '进行中'
   return '未开始'
+}
+
+function getEstimatedEndDate(block) {
+  const nodes = getLeafNodes(areaData[block]?.nodes || [])
+  const endDates = nodes.map(n => n.endDate).filter(d => d)
+  if (endDates.length === 0) return ''
+  return endDates.sort().pop()
 }
 
 function getStatusType(status) {
@@ -820,6 +828,7 @@ onMounted(async () => {
 </script>
 
 <style scoped>
+/* YTO Brand Progress Management */
 .progress-management-pro {
   padding: 0;
   position: relative;
@@ -830,6 +839,7 @@ onMounted(async () => {
   flex-direction: column;
 }
 
+/* Professional Page Header */
 .page-header {
   display: flex;
   justify-content: space-between;
@@ -869,6 +879,7 @@ onMounted(async () => {
   color: var(--future-primary);
 }
 
+/* Header Actions */
 .header-actions {
   display: flex;
   gap: var(--future-spacing-sm);
@@ -891,6 +902,7 @@ onMounted(async () => {
   box-shadow: 0 4px 12px rgba(77, 20, 140, 0.3);
 }
 
+/* Main Content */
 .main-content {
   display: flex;
   gap: var(--future-spacing-lg);
@@ -899,6 +911,7 @@ onMounted(async () => {
   padding: 0 var(--future-spacing-lg) var(--future-spacing-lg);
 }
 
+/* Left Sidebar */
 .left-sidebar {
   width: 320px;
   flex-shrink: 0;
@@ -908,6 +921,7 @@ onMounted(async () => {
   overflow-y: auto;
 }
 
+/* Professional Area Card - Liquid Glass */
 .area-card {
   background: linear-gradient(
     135deg,
@@ -979,6 +993,7 @@ onMounted(async () => {
   border-radius: var(--future-radius-full);
 }
 
+/* Progress Section */
 .progress-section {
   display: flex;
   justify-content: center;
@@ -1032,6 +1047,7 @@ onMounted(async () => {
   font-family: var(--future-font-family-secondary);
 }
 
+/* Area Stats */
 .area-stats {
   display: flex;
   justify-content: space-around;
@@ -1055,6 +1071,7 @@ onMounted(async () => {
   color: var(--future-danger);
 }
 
+/* Area Footer */
 .area-footer {
   border-top: 1px solid rgba(77, 20, 140, 0.1);
   padding-top: var(--future-spacing-sm);
@@ -1069,6 +1086,7 @@ onMounted(async () => {
   font-family: var(--future-font-family-secondary);
 }
 
+/* Right Content */
 .right-content {
   flex: 1;
   background: linear-gradient(
@@ -1089,6 +1107,7 @@ onMounted(async () => {
   min-height: 0;
 }
 
+/* Tree Container */
 .tree-container {
   display: flex;
   flex-direction: column;
@@ -1096,6 +1115,7 @@ onMounted(async () => {
   min-height: 0;
 }
 
+/* Search Bar */
 .search-bar {
   display: flex;
   gap: var(--future-spacing-sm);
@@ -1145,12 +1165,14 @@ onMounted(async () => {
   font-family: var(--future-font-family-secondary);
 }
 
+/* Tree Wrapper */
 .tree-wrapper {
   flex: 1;
   overflow-y: auto;
   padding: var(--future-spacing-md);
 }
 
+/* Custom Tree Node */
 .custom-tree-node {
   display: flex;
   align-items: center;
@@ -1169,6 +1191,7 @@ onMounted(async () => {
   font-size: 14px;
 }
 
+/* Gantt Container */
 .gantt-container {
   display: flex;
   flex-direction: column;
@@ -1210,6 +1233,7 @@ onMounted(async () => {
   border-radius: 0 var(--future-radius-md) var(--future-radius-md) 0;
 }
 
+/* Gantt Content */
 .gantt-content {
   flex: 1;
   overflow: auto;
@@ -1220,6 +1244,7 @@ onMounted(async () => {
   padding: 60px;
 }
 
+/* Gantt Chart */
 .gantt-chart {
   display: flex;
   min-width: 100%;
@@ -1284,6 +1309,7 @@ onMounted(async () => {
   position: relative;
 }
 
+/* Gantt Bar */
 .gantt-bar {
   position: absolute;
   top: 6px;
@@ -1332,6 +1358,7 @@ onMounted(async () => {
   text-overflow: ellipsis;
 }
 
+/* Node Detail */
 .node-detail {
   padding: var(--future-spacing-md);
   font-family: var(--future-font-family-secondary);
@@ -1358,6 +1385,7 @@ onMounted(async () => {
   color: var(--future-text-primary);
 }
 
+/* File List */
 .file-list {
   display: flex;
   flex-wrap: wrap;
@@ -1413,6 +1441,9 @@ onMounted(async () => {
   text-align: center;
 }
 
+
+
+/* Responsive Design */
 @media (max-width: 1200px) {
   .main-content {
     flex-direction: column;
@@ -1488,6 +1519,7 @@ onMounted(async () => {
   }
 }
 
+/* Animations */
 @keyframes futurismSlideInDown {
   from {
     opacity: 0;
