@@ -1,1 +1,1 @@
-SafetyInspection.vue完整内容(UI优化为毛玻璃风格)
+SafetyInspection.vue完整内容
