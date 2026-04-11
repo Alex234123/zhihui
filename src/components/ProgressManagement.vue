@@ -95,6 +95,15 @@
               <el-button :icon="Download" @click="exportData">
                 导出数据
               </el-button>
+              <el-button 
+                v-if="isAdmin" 
+                type="danger" 
+                :icon="RefreshRight" 
+                @click="forceResetCurrentFloor"
+                plain
+              >
+                🔄 重置当前楼层
+              </el-button>
             </div>
           </div>
 
@@ -383,7 +392,8 @@ import {
   User,
   DataLine,
   Calendar,
-  Timer
+  Timer,
+  RefreshRight
 } from '@element-plus/icons-vue'
 import * as echarts from 'echarts'
 // 导入弹窗稳定性增强工具
@@ -914,6 +924,61 @@ async function loadCurrentFloorData() {
     }
   } catch (error) {
     console.error('[ProgressManagement] ❌ 加载楼层数据失败:', error)
+  }
+}
+
+// 管理员强制重置当前楼层（清除脏数据）
+async function forceResetCurrentFloor() {
+  if (!isAdmin.value) {
+    ElMessage.warning('只有管理员才能执行此操作')
+    return
+  }
+  
+  try {
+    const areaId = selectedAreaId.value
+    const floor = currentFloor.value
+    const storageKey = `progressDetail-${areaId}-${floor}`
+    
+    await ElMessageBox.confirm(
+      `确定要重置 ${areas.value.find(a => a.areaId === areaId)?.areaName || areaId} ${FLOOR_NAMES[floor - 1]} 的所有数据吗？\n\n⚠️ 此操作将删除该楼层的所有节点数据并恢复为默认模板！`,
+      '⚠️ 强制重置确认',
+      { 
+        confirmButtonText: '确定重置', 
+        cancelButtonText: '取消', 
+        type: 'warning',
+        confirmButtonClass: 'el-button--danger'
+      }
+    )
+    
+    console.log(`[ProgressManagement] 🗑️ 管理员强制重置: ${storageKey}`)
+    
+    // 1. 从服务器删除脏数据
+    await dataService.set(storageKey, null)
+    
+    // 2. 清除可能的旧键（兼容性）
+    localStorage.removeItem(storageKey)
+    if (localStorage.getItem('progressDetail')) {
+      const detail = JSON.parse(localStorage.getItem('progressDetail') || '{}')
+      if (detail && Array.isArray(detail)) {
+        const areaIndex = detail.findIndex(a => a.areaId === areaId)
+        if (areaIndex !== -1 && detail[areaIndex].stages) {
+          detail[areaIndex].stages = []
+          localStorage.setItem('progressDetail', JSON.stringify(detail))
+        }
+      }
+    }
+    
+    // 3. 重新初始化当前楼层
+    await initializeCurrentFloorWithPrefix()
+    
+    ElMessage.success(`✅ ${FLOOR_NAMES[floor - 1]} 数据已重置为默认模板`)
+    console.log('[ProgressManagement] ✅ 强制重置完成')
+    
+  } catch (error) {
+    if (error !== 'cancel') {
+      console.error('[ProgressManagement] ❌ 强制重置失败:', error)
+      ElMessage.error('重置失败: ' + error.message)
+    }
   }
 }
 
@@ -2447,7 +2512,7 @@ watch(showBatchModal, (newVal) => {
   font-size: 11px;
   color: #409EFF;
   background: #ecf5ff;
-  padding: 1px 6px;
+   padding: 1px 6px;
   border-radius: 10px;
   margin-left: 4px;
 }
