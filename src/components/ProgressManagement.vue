@@ -864,30 +864,39 @@ async function loadCurrentFloorData() {
     console.log(`[ProgressManagement] 正在加载 ${areaId} ${FLOOR_NAMES[floor - 1]} 数据... (期望前缀: "${expectedPrefix}")`)
     
     // 尝试从服务器加载该楼层的数据
-    const savedData = await dataService.get(storageKey, null)
+    let savedData = await dataService.get(storageKey, null)
     
+    // 强力修复：如果数据存在，严格验证楼层前缀是否匹配
     if (savedData && savedData.stages && savedData.stages.length > 0) {
-      // 验证数据的楼层前缀是否匹配（防止数据显示错误楼层）
       const firstStageName = savedData.stages[0]?.name || ''
       const firstTaskName = savedData.stages[0]?.subStages[0]?.tasks[0]?.name || ''
       
-      // 检查数据是否包含期望的楼层前缀，或者不包含任何楼层前缀（旧数据兼容）
+      console.log(`[ProgressManagement] 🔍 检查数据: 阶段名="${firstStageName}", 任务名="${firstTaskName}"`)
+      
+      // 检查数据是否包含期望的楼层前缀
       const hasCorrectPrefix = firstStageName.startsWith(expectedPrefix) || firstTaskName.startsWith(expectedPrefix)
-      const hasAnyFloorPrefix = FLOOR_PREFIXES.some(prefix => 
-        firstStageName.startsWith(prefix) || firstTaskName.startsWith(prefix)
-      )
       
-      if (hasAnyFloorPrefix && !hasCorrectPrefix) {
-        // 数据包含其他楼层的前缀，说明数据被污染了！
-        console.warn(`[ProgressManagement] ⚠️ 数据校验失败! 存储 key=${storageKey}, 但数据包含其他楼层前缀`)
-        console.warn(`[ProgressManagement]   期望前缀: "${expectedPrefix}", 实际阶段名: "${firstStageName}", 任务名: "${firstTaskName}"`)
-        console.warn(`[ProgressManagement]   将使用正确的楼层前缀重新初始化数据...`)
+      // 检查数据是否包含其他楼层的前缀（说明是脏数据）
+      const hasWrongFloorPrefix = FLOOR_PREFIXES.some(prefix => {
+        if (prefix === expectedPrefix) return false  // 跳过期望的前缀
+        return firstStageName.startsWith(prefix) || firstTaskName.startsWith(prefix)
+      })
+      
+      if (hasWrongFloorPrefix || !hasCorrectPrefix) {
+        // 发现脏数据或不匹配的数据！
+        console.warn(`[ProgressManagement] ⚠️ 检测到脏数据! key=${storageKey}`)
+        console.warn(`[ProgressManagement]   期望: "${expectedPrefix}", 实际阶段: "${firstStageName}", 任务: "${firstTaskName}"`)
         
-        // 使用正确的楼层前缀重新初始化
-        await initializeCurrentFloorWithPrefix()
-        return
+        // 强制删除服务器上的脏数据
+        console.warn(`[ProgressManagement] 🗑️ 正在删除脏数据并重新初始化...`)
+        await dataService.set(storageKey, null)  // 清除脏数据
+        savedData = null  // 设为null以触发重新初始化
+        
+        ElMessage.warning(`${FLOOR_NAMES[floor - 1]} 数据已重置（检测到错误的楼层数据）`)
       }
-      
+    }
+    
+    if (savedData && savedData.stages && savedData.stages.length > 0) {
       // 数据验证通过，恢复它
       const areaIndex = areas.value.findIndex(a => a.areaId === areaId)
       if (areaIndex !== -1) {
@@ -899,8 +908,8 @@ async function loadCurrentFloorData() {
         await syncProgressToDashboard()
       }
     } else {
-      // 无已保存数据，使用默认模板并添加楼层前缀
-      console.log(`[ProgressManagement] ℹ️ ${FLOOR_NAMES[floor - 1]} 无历史数据，使用默认模板`)
+      // 无已保存数据或数据已被清理，使用默认模板并添加楼层前缀
+      console.log(`[ProgressManagement] ℹ️ ${FLOOR_NAMES[floor - 1]} 无历史数据/数据已重置，使用默认模板`)
       await initializeCurrentFloorWithPrefix()
     }
   } catch (error) {
