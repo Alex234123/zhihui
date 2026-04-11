@@ -72,6 +72,20 @@
           <div class="page-header">
             <h2 class="page-title">{{ selectedArea.areaName }} - 进度管理</h2>
             <div class="header-actions">
+              <!-- 楼层切换按钮组 -->
+              <div class="floor-switcher">
+                <span class="floor-label">当前楼层：</span>
+                <el-radio-group v-model="currentFloor" size="small" @change="switchFloor">
+                  <el-radio-button
+                    v-for="floor in totalFloors"
+                    :key="floor"
+                    :value="floor"
+                  >
+                    {{ FLOOR_NAMES[floor - 1] }}
+                  </el-radio-button>
+                </el-radio-group>
+              </div>
+              
               <el-button type="primary" :icon="CopyDocument" @click="showCopyModal = true">
                 复制模板
               </el-button>
@@ -372,6 +386,8 @@ import {
   Timer
 } from '@element-plus/icons-vue'
 import * as echarts from 'echarts'
+// 导入弹窗稳定性增强工具
+import { createStableClickHandler, safeOpenDialog } from '../utils/dialogUtils.js'
 import dataService from '../services/dataService'
 
 const TEMPLATE_STAGES = [
@@ -723,6 +739,36 @@ const TEMPLATE_STAGES = [
   }
 ]
 
+// 创建带楼层前缀的模板数据
+function createTemplateStages(prefix = '') {
+  const template = JSON.parse(JSON.stringify(TEMPLATE_STAGES))
+  
+  // 递归地为所有节点添加前缀
+  function addPrefixToNode(node, pfx) {
+    if (node.name && !node.name.startsWith(pfx)) {
+      node.name = pfx + node.name
+      node.label = node.name  // 同步更新label
+    }
+    
+    if (node.subStages) {
+      node.subStages.forEach(sub => addPrefixToNode(sub, pfx))
+    }
+    
+    if (node.tasks) {
+      node.tasks.forEach(task => addPrefixToNode(task, pfx))
+    }
+    
+    if (node.children) {
+      node.children.forEach(child => addPrefixToNode(child, pfx))
+    }
+  }
+  
+  // 为每个阶段及其子节点添加前缀
+  template.forEach(stage => addPrefixToNode(stage, prefix))
+  
+  return template
+}
+
 const AREAS = [
   { id: 'area-A', name: 'A区' },
   { id: 'area-B', name: 'B区' },
@@ -737,12 +783,152 @@ const props = defineProps({
   }
 })
 
+// 多楼层独立数据结构
+// 数据格式: allAreaData[areaId][floor] = { stages: [...], ... }
+const allAreaData = ref({})
+const currentAreaData = computed(() => {
+  if (!allAreaData.value[selectedAreaId.value]) return null
+  return allAreaData.value[selectedAreaId.value][currentFloor.value] || null
+})
+
 const areas = ref([])
 const selectedAreaId = ref('area-A')
 const selectedTaskIds = ref([])
 const drawerVisible = ref(false)
 const currentTask = ref(null)
 const editForm = ref(null)
+
+// 楼层管理
+const currentFloor = ref(1)
+const totalFloors = 3
+const FLOOR_NAMES = ['一层', '二层', '三层']
+const FLOOR_PREFIXES = ['一层-', '二层-', '三层-']
+
+// 切换楼层：保存当前层数据 → 加载新楼层数据
+async function switchFloor(floor) {
+  if (floor < 1 || floor > totalFloors) return
+  
+  const oldFloor = currentFloor.value
+  console.log(`[ProgressManagement] 切换楼层: ${FLOOR_NAMES[oldFloor - 1]} -> ${FLOOR_NAMES[floor - 1]}`)
+  
+  // 1. 保存当前楼层的修改
+  if (currentAreaData.value && oldFloor !== floor) {
+    await saveCurrentFloorData()
+  }
+  
+  // 2. 切换到新楼层
+  currentFloor.value = floor
+  
+  // 3. 加载新楼层数据（如果存在）
+  await loadCurrentFloorData()
+}
+
+// 保存当前区域+楼层的详细数据
+async function saveCurrentFloorData() {
+  try {
+    const areaId = selectedAreaId.value
+    const floor = currentFloor.value
+    
+    if (!allAreaData.value[areaId]) {
+      allAreaData.value[areaId] = {}
+    }
+    
+    // 获取当前显示的stages数据
+    const areaIndex = areas.value.findIndex(a => a.areaId === areaId)
+    if (areaIndex === -1 || !areas.value[areaIndex].stages) return
+    
+    // 保存到对应楼层的数据槽位
+    allAreaData.value[areaId][floor] = JSON.parse(JSON.stringify(areas.value[areaIndex]))
+    
+    // 同步到服务器（使用唯一键）
+    const storageKey = `progressDetail-${areaId}-${floor}`
+    const result = await dataService.set(storageKey, allAreaData.value[areaId][floor])
+    
+    console.log(`[ProgressManagement] ✅ 已保存 ${areaId} ${FLOOR_NAMES[floor - 1]} 数据:`, result ? '成功' : '失败')
+    
+    return result
+  } catch (error) {
+    console.error('[ProgressManagement] ❌ 保存楼层数据失败:', error)
+    return false
+  }
+}
+
+// 加载当前区域+楼层的详细数据
+async function loadCurrentFloorData() {
+  try {
+    const areaId = selectedAreaId.value
+    const floor = currentFloor.value
+    const storageKey = `progressDetail-${areaId}-${floor}`
+    const expectedPrefix = FLOOR_PREFIXES[floor - 1]
+    
+    console.log(`[ProgressManagement] 正在加载 ${areaId} ${FLOOR_NAMES[floor - 1]} 数据... (期望前缀: "${expectedPrefix}")`)
+    
+    // 尝试从服务器加载该楼层的数据
+    const savedData = await dataService.get(storageKey, null)
+    
+    if (savedData && savedData.stages && savedData.stages.length > 0) {
+      // 验证数据的楼层前缀是否匹配（防止数据显示错误楼层）
+      const firstStageName = savedData.stages[0]?.name || ''
+      const firstTaskName = savedData.stages[0]?.subStages[0]?.tasks[0]?.name || ''
+      
+      // 检查数据是否包含期望的楼层前缀，或者不包含任何楼层前缀（旧数据兼容）
+      const hasCorrectPrefix = firstStageName.startsWith(expectedPrefix) || firstTaskName.startsWith(expectedPrefix)
+      const hasAnyFloorPrefix = FLOOR_PREFIXES.some(prefix => 
+        firstStageName.startsWith(prefix) || firstTaskName.startsWith(prefix)
+      )
+      
+      if (hasAnyFloorPrefix && !hasCorrectPrefix) {
+        // 数据包含其他楼层的前缀，说明数据被污染了！
+        console.warn(`[ProgressManagement] ⚠️ 数据校验失败! 存储 key=${storageKey}, 但数据包含其他楼层前缀`)
+        console.warn(`[ProgressManagement]   期望前缀: "${expectedPrefix}", 实际阶段名: "${firstStageName}", 任务名: "${firstTaskName}"`)
+        console.warn(`[ProgressManagement]   将使用正确的楼层前缀重新初始化数据...`)
+        
+        // 使用正确的楼层前缀重新初始化
+        await initializeCurrentFloorWithPrefix()
+        return
+      }
+      
+      // 数据验证通过，恢复它
+      const areaIndex = areas.value.findIndex(a => a.areaId === areaId)
+      if (areaIndex !== -1) {
+        Object.assign(areas.value[areaIndex], savedData)
+        updateAreaProgress()
+        console.log(`[ProgressManagement] ✅ 从服务器恢复 ${FLOOR_NAMES[floor - 1]} 数据 (节点数: ${savedData.stages.length} 个阶段)`)
+        
+        // 同步到 Dashboard（确保数据一致）
+        await syncProgressToDashboard()
+      }
+    } else {
+      // 无已保存数据，使用默认模板并添加楼层前缀
+      console.log(`[ProgressManagement] ℹ️ ${FLOOR_NAMES[floor - 1]} 无历史数据，使用默认模板`)
+      await initializeCurrentFloorWithPrefix()
+    }
+  } catch (error) {
+    console.error('[ProgressManagement] ❌ 加载楼层数据失败:', error)
+  }
+}
+
+// 为当前楼层初始化带前缀的模板数据
+async function initializeCurrentFloorWithPrefix() {
+  const prefix = FLOOR_PREFIXES[currentFloor.value - 1]
+  const areaIndex = areas.value.findIndex(a => a.areaId === selectedAreaId.value)
+  if (areaIndex === -1) return
+  
+  // 创建带楼层前缀的深拷贝模板
+  const templateStages = createTemplateStages(prefix)
+  areas.value[areaIndex].stages = templateStages
+  
+  // 更新进度计算
+  updateAreaProgress()
+  
+  // 保存到服务器（当前楼层详细数据）
+  await saveCurrentFloorData()
+  
+  // 同步进度概要到 Dashboard（关键修复：确保数据一致）
+  await syncProgressToDashboard()
+  
+  ElMessage.info(`已初始化 ${FLOOR_NAMES[currentFloor.value - 1]} 默认数据（带"${prefix}"前缀）`)
+}
 
 // 管理员权限检查
 const isAdmin = computed(() => {
@@ -870,6 +1056,22 @@ watch(activeTab, (newTab) => {
   }
 })
 
+watch(currentFloor, (newFloor) => {
+  if (activeTab.value === 'gantt') {
+    nextTick(() => {
+      initGanttChart()
+    })
+  }
+})
+
+watch(selectedAreaId, () => {
+  if (activeTab.value === 'gantt') {
+    nextTick(() => {
+      initGanttChart()
+    })
+  }
+})
+
 function convertToDashboardProgress() {
   return areas.value.map(area => {
     const blockLetter = area.areaId.replace('area-', '')
@@ -937,29 +1139,59 @@ function getCurrentStage(stages) {
 
 async function syncProgressToDashboard() {
   try {
+    console.log('[ProgressManagement] 开始同步进度数据到服务器...')
+    
     const progressData = convertToDashboardProgress()
-    await dataService.set('progress', progressData)
-    await dataService.set('progressDetail', JSON.parse(JSON.stringify(areas.value)))
+    const detailData = JSON.parse(JSON.stringify(areas.value))
+    
+    // 保存进度概要
+    const result1 = await dataService.set('progress', progressData)
+    console.log('[ProgressManagement] ✅ 进度概要已保存:', result1 ? '成功' : '失败')
+    
+    // 保存详细数据（包含所有节点信息）
+    const result2 = await dataService.set('progressDetail', detailData)
+    console.log('[ProgressManagement] ✅ 详细数据已保存:', result2 ? '成功' : '失败')
+    
+    if (result1 && result2) {
+      ElMessage.success({
+        message: '数据已同步到服务器',
+        duration: 2000,
+        showClose: true
+      })
+    } else {
+      ElMessage.warning('数据同步可能未完全成功，请检查网络连接')
+    }
+    
+    return (result1 && result2)
   } catch (error) {
-    console.error('同步进度数据失败:', error)
+    console.error('[ProgressManagement] ❌ 同步进度数据失败:', error)
+    ElMessage.error('数据同步失败: ' + error.message)
+    return false
   }
+}
+
+// 添加自动保存防抖（避免频繁保存）
+let autoSaveTimeout = null
+function debouncedSync() {
+  if (autoSaveTimeout) clearTimeout(autoSaveTimeout)
+  autoSaveTimeout = setTimeout(() => {
+    syncProgressToDashboard()
+  }, 1000) // 1秒后自动保存
 }
 
 onMounted(async () => {
   try {
-    const savedDetail = await dataService.get('progressDetail', null)
-    if (savedDetail && savedDetail.length > 0) {
-      console.log('[ProgressManagement] 从服务器恢复完整的进度数据')
-      areas.value = savedDetail
-      updateAreaProgress()
-    } else {
-      console.log('[ProgressManagement] 无已保存数据，使用默认模板')
-      initializeAreas()
-      await syncProgressToDashboard()
-    }
-  } catch (error) {
-    console.error('加载进度数据失败:', error)
+    // 初始化区域基础数据（不含stages）
     initializeAreas()
+    
+    // 加载当前选中区域的当前楼层数据
+    await loadCurrentFloorData()
+    
+  } catch (error) {
+    console.error('[ProgressManagement] 初始化失败:', error)
+    initializeAreas()
+    // 如果加载失败，尝试初始化当前楼层
+    initializeCurrentFloorWithPrefix()
   }
 })
 
@@ -967,16 +1199,24 @@ function initializeAreas() {
   areas.value = AREAS.map(area => ({
     areaId: area.id,
     areaName: area.name,
-    stages: JSON.parse(JSON.stringify(TEMPLATE_STAGES)),
+    stages: [],  // 先不填充stages，等loadCurrentFloorData后填充
     createdAt: new Date().toISOString(),
     updatedAt: new Date().toISOString()
   }))
-  
-  updateAreaProgress()
 }
 
-function selectArea(areaId) {
+// 切换区域：保存当前区域数据 → 加载新区域当前楼层数据
+async function selectArea(areaId) {
+  // 1. 保存当前区域的当前楼层数据
+  if (selectedAreaId.value && selectedAreaId.value !== areaId) {
+    await saveCurrentFloorData()
+  }
+  
+  // 2. 切换到新区域
   selectedAreaId.value = areaId
+  
+  // 3. 加载新区域的当前楼层数据
+  await loadCurrentFloorData()
 }
 
 function updateAreaProgress() {
@@ -1012,20 +1252,35 @@ function calculateProgress(stages) {
 
   const progress = totalTasks > 0 ? Math.round(sumProgress / totalTasks) : 0
 
+  let latestPlannedEnd = null
+  let hasAnyPlanDate = false
+
   for (const stage of stages) {
     for (let i = stage.subStages.length - 1; i >= 0; i--) {
       const subStage = stage.subStages[i]
       for (let j = subStage.tasks.length - 1; j >= 0; j--) {
         const task = subStage.tasks[j]
+        
+        if (task.plannedEndDate) {
+          hasAnyPlanDate = true
+          if (!latestPlannedEnd || new Date(task.plannedEndDate) > new Date(latestPlannedEnd)) {
+            latestPlannedEnd = task.plannedEndDate
+          }
+        }
+        
         const taskStatus = computeTaskStatus(task)
         if (taskStatus !== 'completed' && taskStatus !== 'completed_ontime' && taskStatus !== 'completed_ahead' && taskStatus !== 'completed_overdue') {
           if (task.plannedEndDate) {
             estimatedCompletionDate = task.plannedEndDate
           }
-          return { progress, completedTasks, totalTasks, estimatedCompletionDate, delayedTasks }
+          break
         }
       }
     }
+  }
+
+  if (!estimatedCompletionDate && hasAnyPlanDate) {
+    estimatedCompletionDate = latestPlannedEnd
   }
 
   if (!estimatedCompletionDate) {
@@ -1100,24 +1355,37 @@ function handleCheck(data, checkedInfo) {
 
 // ========== 节点增删改功能（仅管理员）==========
 
-function showAddNodeDialog(parentNode) {
+// 使用增强型点击处理器包装弹窗打开函数
+const stableShowAddNodeDialog = createStableClickHandler(async function(parentNode) {
   if (!isAdmin.value) return
   currentNodeData.value = parentNode
   nodeDialogMode.value = 'add'
   nodeForm.name = ''
   nodeForm.nodeType = 'task'
-  nodeDialogVisible.value = true
-}
+  
+  // 使用安全的方式打开弹窗
+  await safeOpenDialog(nodeDialogVisible, { preDelay: 80 })
+}, { delay: 80, retries: 2 })
 
-function showEditNodeDialog(node) {
+const stableShowEditNodeDialog = createStableClickHandler(async function(node) {
   if (!isAdmin.value) return
   currentNodeData.value = node
   nodeDialogMode.value = 'edit'
   nodeForm.name = node.label || node.name || ''
-  nodeDialogVisible.value = true
+  
+  // 使用安全的方式打开弹窗
+  await safeOpenDialog(nodeDialogVisible, { preDelay: 80 })
+}, { delay: 80, retries: 2 })
+
+function showAddNodeDialog(parentNode) {
+  stableShowAddNodeDialog(parentNode)
 }
 
-function confirmNodeAction() {
+function showEditNodeDialog(node) {
+  stableShowEditNodeDialog(node)
+}
+
+async function confirmNodeAction() {
   if (!nodeForm.name.trim()) {
     ElMessage.warning('请输入节点名称')
     return
@@ -1136,8 +1404,19 @@ function confirmNodeAction() {
 
   updateAreaProgress()
   nodeDialogVisible.value = false
-  syncProgressToDashboard()
-  ElMessage.success(nodeDialogMode.value === 'add' ? '节点添加成功' : '节点修改成功')
+  
+  // 保存到当前区域+楼层的独立数据槽位（关键修改）
+  const saveResult = await saveCurrentFloorData()
+  
+  if (saveResult) {
+    ElMessage.success({
+      message: `${nodeDialogMode.value === 'add' ? '节点添加' : '节点修改'}成功（已同步到服务器）`,
+      duration: 2000,
+      showClose: true
+    })
+  } else {
+    ElMessage.warning('操作成功但数据同步可能失败')
+  }
 }
 
 function addNodeToStages(stages, parentNode) {
@@ -1226,24 +1505,45 @@ function addNodeToStages(stages, parentNode) {
 
 function updateNodeInStages(stages, targetNode) {
   const newName = nodeForm.name.trim()
+  
+  if (!newName) {
+    ElMessage.warning('节点名称不能为空')
+    return
+  }
+
+  console.log('[ProgressManagement] 更新节点:', targetNode.id, '->', newName)
 
   for (const stage of stages) {
+    // 检查阶段节点
     if (stage.id === targetNode.id) {
       stage.name = newName
-      return
+      stage.label = newName  // 同时更新label（用于el-tree显示）
+      console.log('✅ 已更新阶段名称')
+      return true
     }
+    
     for (const subStage of stage.subStages) {
+      // 检查子阶段节点
       if (subStage.id === targetNode.id) {
         subStage.name = newName
-        return
+        subStage.label = newName  // 同时更新label
+        console.log('✅ 已更新子阶段名称')
+        return true
       }
-      const task = subStage.tasks.find(t => t.id === targetNode.id)
-      if (task) {
-        task.name = newName
-        return
+      
+      // 检查任务节点
+      const taskIndex = subStage.tasks.findIndex(t => t.id === targetNode.id)
+      if (taskIndex !== -1) {
+        subStage.tasks[taskIndex].name = newName
+        subStage.tasks[taskIndex].label = newName  // 同时更新label
+        console.log('✅ 已更新任务名称')
+        return true
       }
     }
   }
+  
+  console.warn('❌ 未找到目标节点:', targetNode.id)
+  return false
 }
 
 async function deleteNode(node) {
@@ -1718,7 +2018,11 @@ function initGanttChart() {
   const xMax = new Date(maxDate.getTime() + paddingAfter)
 
   const option = {
-    title: { text: '项目甘特图（计划 vs 实际）', left: 'center' },
+    title: { 
+      text: `${selectedArea.value?.areaName || ''} - ${FLOOR_NAMES[currentFloor.value - 1]}甘特图（计划 vs 实际）`, 
+      left: 'center',
+      textStyle: { fontSize: 16, fontWeight: 'bold' }
+    },
     tooltip: {
       formatter: function(params) {
         const task = params.data
@@ -1727,7 +2031,7 @@ function initGanttChart() {
         const end = new Date(task.value[2]).toLocaleDateString('zh-CN')
         const durationMs = task.value[2] - task.value[1]
         const durationDays = Math.round(durationMs / 86400000)
-        return `${task.name}<br/>${seriesName}<br/>开始: ${start}<br/>结束: ${end}<br/>工期: ${durationDays}天`
+        return `${FLOOR_NAMES[currentFloor.value - 1]} | ${task.name}<br/>${seriesName}<br/>开始: ${start}<br/>结束: ${end}<br/>工期: ${durationDays}天`
       }
     },
     legend: { data: ['计划时间', '实际进度'], bottom: 0 },
@@ -1920,6 +2224,37 @@ watch(showBatchModal, (newVal) => {
 .header-actions {
   display: flex;
   gap: 12px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+/* 楼层切换器样式 */
+.floor-switcher {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 12px;
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 8px;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+}
+
+.floor-label {
+  font-size: 13px;
+  color: #ffffff;
+  font-weight: 500;
+  white-space: nowrap;
+}
+
+.floor-switcher :deep(.el-radio-group) {
+  display: flex;
+  gap: 4px;
+}
+
+.floor-switcher :deep(.el-radio-button__inner) {
+  padding: 5px 12px;
+  font-size: 13px;
+  border-radius: 4px !important;
 }
 
 .content-tabs {
