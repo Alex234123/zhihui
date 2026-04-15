@@ -1,0 +1,16 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="200" height="100" viewBox="0 0 200 100">
+  <!-- 紫色圆形背景 -->
+  <circle cx="50" cy="50" r="45" fill="#662a8f" />
+  
+  <!-- 白色 YT 字母 -->
+  <text x="30" y="60" font-family="Arial, sans-serif" font-size="24" font-weight="bold" fill="white">YT</text>
+  
+  <!-- 橙色 O 字母 -->
+  <circle cx="65" cy="45" r="8" fill="#ff7f00" />
+  
+  <!-- 圆通文字 -->
+  <text x="110" y="45" font-family="Arial, sans-serif" font-size="18" font-weight="bold" fill="#662a8f">圆通</text>
+  
+  <!-- YTO 文字 -->
+  <text x="110" y="70" font-family="Arial, sans-serif" font-size="14" font-weight="bold" fill="#662a8f">YTO</text>
+</svg>

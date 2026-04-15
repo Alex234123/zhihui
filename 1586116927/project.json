@@ -1,0 +1,23 @@
+{
+	"contentrating" : "Everyone",
+	"file" : "background.html",
+	"general" : 
+	{
+		"properties" : 
+		{
+			"schemecolor" : 
+			{
+				"order" : 0,
+				"text" : "ui_browse_properties_scheme_color",
+				"type" : "color",
+				"value" : "0 0 0"
+			}
+		}
+	},
+	"preview" : "preview.jpg",
+	"tags" : [ "Game" ],
+	"title" : "Deltarune Battle Background",
+	"type" : "web",
+	"visibility" : "public",
+	"workshopid" : "1586116927"
+}

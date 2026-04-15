@@ -1,0 +1,132 @@
+{
+  "timestamp": "2026-04-05T09:49:23.834Z",
+  "summary": {
+    "errors": 1,
+    "warnings": 4,
+    "success": 7
+  },
+  "details": [
+    {
+      "category": "页面信息",
+      "message": "标题: 智慧工地管理系统, URL: http://192.168.8.174:3001/dashboard",
+      "level": "success",
+      "timestamp": "2026-04-05T09:48:46.591Z"
+    },
+    {
+      "category": "导航",
+      "message": "找到 0 个链接",
+      "level": "warning",
+      "timestamp": "2026-04-05T09:48:46.720Z"
+    },
+    {
+      "category": "导航总结",
+      "message": "共访问了 0 个不同页面",
+      "level": "success",
+      "timestamp": "2026-04-05T09:48:46.723Z"
+    },
+    {
+      "category": "功能检测",
+      "message": "发现功能关键词: 进度, 人员, 设备, 安全, 材料, 质量, 照片, 编辑, 添加, 刷新, 重置",
+      "level": "success",
+      "timestamp": "2026-04-05T09:48:46.799Z"
+    },
+    {
+      "category": "数据可视化",
+      "message": "发现 55 个图表组件",
+      "level": "success",
+      "timestamp": "2026-04-05T09:48:46.819Z"
+    },
+    {
+      "category": "表单组件",
+      "message": "发现 0 个表单",
+      "level": "info",
+      "timestamp": "2026-04-05T09:48:46.843Z"
+    },
+    {
+      "category": "弹窗按钮",
+      "message": "找到 14 个可能触发弹窗的按钮",
+      "level": "info",
+      "timestamp": "2026-04-05T09:48:46.873Z"
+    },
+    {
+      "category": "弹窗2",
+      "message": "操作失败: locator.click: Timeout 15000ms exceeded.\nCall log:\n\u001b[2m  - waiting for locator('button:has-text(\"编辑\"), button:has-text(\"添加\"), button:has-text(\"详情\"), button:has-text(\"查看\")').nth(1)\u001b[22m\n\u001b[2m    - locator resolved to <button type=\"button\" data-v-74444b0c=\"\" aria-disabled=\"false\" class=\"el-button el-button--primary el-button--small is-plain\">…</button>\u001b[22m\n\u001b[2m  - attempting click action\u001b[22m\n\u001b[2m    - waiting for element to be visible, enabled and stable\u001b[22m\n\u001b[2m  - element was detached from the DOM, retrying\u001b[22m\n",
+      "level": "warning",
+      "timestamp": "2026-04-05T09:49:05.950Z"
+    },
+    {
+      "category": "弹窗3",
+      "message": "操作失败: locator.textContent: Timeout 15000ms exceeded.\nCall log:\n\u001b[2m  - waiting for locator('button:has-text(\"编辑\"), button:has-text(\"添加\"), button:has-text(\"详情\"), button:has-text(\"查看\")').nth(2)\u001b[22m\n",
+      "level": "warning",
+      "timestamp": "2026-04-05T09:49:20.958Z"
+    },
+    {
+      "category": "危险操作",
+      "message": "发现 1 个重置/删除按钮（未执行）",
+      "level": "warning",
+      "timestamp": "2026-04-05T09:49:21.003Z"
+    },
+    {
+      "category": "控制台错误",
+      "message": "共 1 个错误:",
+      "level": "error",
+      "timestamp": "2026-04-05T09:49:21.036Z"
+    },
+    {
+      "category": "控制台警告",
+      "message": "共 3 个警告",
+      "level": "info",
+      "timestamp": "2026-04-05T09:49:21.040Z"
+    },
+    {
+      "category": "性能测试",
+      "message": "页面重新加载时间: 1673ms",
+      "level": "success",
+      "timestamp": "2026-04-05T09:49:22.721Z"
+    },
+    {
+      "category": "DOM分析",
+      "message": "DOM节点数: 635, HTML大小: 56.7KB",
+      "level": "success",
+      "timestamp": "2026-04-05T09:49:23.192Z"
+    },
+    {
+      "category": "资源",
+      "message": "图片数量: 1",
+      "level": "success",
+      "timestamp": "2026-04-05T09:49:23.223Z"
+    }
+  ],
+  "issues": [
+    {
+      "category": "控制台错误",
+      "message": "共 1 个错误:",
+      "level": "error",
+      "timestamp": "2026-04-05T09:49:21.036Z"
+    },
+    {
+      "category": "导航",
+      "message": "找到 0 个链接",
+      "level": "warning",
+      "timestamp": "2026-04-05T09:48:46.720Z"
+    },
+    {
+      "category": "弹窗2",
+      "message": "操作失败: locator.click: Timeout 15000ms exceeded.\nCall log:\n\u001b[2m  - waiting for locator('button:has-text(\"编辑\"), button:has-text(\"添加\"), button:has-text(\"详情\"), button:has-text(\"查看\")').nth(1)\u001b[22m\n\u001b[2m    - locator resolved to <button type=\"button\" data-v-74444b0c=\"\" aria-disabled=\"false\" class=\"el-button el-button--primary el-button--small is-plain\">…</button>\u001b[22m\n\u001b[2m  - attempting click action\u001b[22m\n\u001b[2m    - waiting for element to be visible, enabled and stable\u001b[22m\n\u001b[2m  - element was detached from the DOM, retrying\u001b[22m\n",
+      "level": "warning",
+      "timestamp": "2026-04-05T09:49:05.950Z"
+    },
+    {
+      "category": "弹窗3",
+      "message": "操作失败: locator.textContent: Timeout 15000ms exceeded.\nCall log:\n\u001b[2m  - waiting for locator('button:has-text(\"编辑\"), button:has-text(\"添加\"), button:has-text(\"详情\"), button:has-text(\"查看\")').nth(2)\u001b[22m\n",
+      "level": "warning",
+      "timestamp": "2026-04-05T09:49:20.958Z"
+    },
+    {
+      "category": "危险操作",
+      "message": "发现 1 个重置/删除按钮（未执行）",
+      "level": "warning",
+      "timestamp": "2026-04-05T09:49:21.003Z"
+    }
+  ]
+}

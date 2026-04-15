@@ -1,0 +1,107 @@
+{
+  "testTime": "2026-04-05T09:47:07.685Z",
+  "baseUrl": "http://192.168.8.174:3001",
+  "credentials": {
+    "username": "admin",
+    "password": "admin"
+  },
+  "summary": {
+    "total": 13,
+    "passed": 10,
+    "failed": 3
+  },
+  "results": [
+    {
+      "name": "访问首页",
+      "status": "PASS",
+      "details": "重定向到登录页面",
+      "timestamp": "2026-04-05T09:45:18.791Z"
+    },
+    {
+      "name": "登录功能",
+      "status": "PASS",
+      "details": "成功登录，当前URL: http://192.168.8.174:3001/dashboard",
+      "timestamp": "2026-04-05T09:45:37.994Z"
+    },
+    {
+      "name": "导航探索",
+      "status": "FAIL",
+      "details": "Cannot read properties of undefined (reading 'snapshot')",
+      "timestamp": "2026-04-05T09:45:38.019Z"
+    },
+    {
+      "name": "按钮交互",
+      "status": "PASS",
+      "details": "测试了 10 个按钮",
+      "timestamp": "2026-04-05T09:46:14.722Z"
+    },
+    {
+      "name": "表单输入",
+      "status": "PASS",
+      "details": "测试了 1 个输入框",
+      "timestamp": "2026-04-05T09:46:24.766Z"
+    },
+    {
+      "name": "弹窗检测",
+      "status": "PASS",
+      "details": "发现 3 个弹窗",
+      "timestamp": "2026-04-05T09:46:24.783Z"
+    },
+    {
+      "name": "响应式-Desktop 1920x1080",
+      "status": "FAIL",
+      "details": "page.screenshot: Timeout 10000ms exceeded.\nCall log:\n\u001b[2m  - taking page screenshot\u001b[22m\n\u001b[2m  - waiting for fonts to load...\u001b[22m\n\u001b[2m  - fonts loaded\u001b[22m\n",
+      "timestamp": "2026-04-05T09:46:40.209Z"
+    },
+    {
+      "name": "响应式-Laptop 1366x768",
+      "status": "PASS",
+      "details": "布局正常",
+      "timestamp": "2026-04-05T09:46:49.938Z"
+    },
+    {
+      "name": "响应式-Tablet 768x1024",
+      "status": "PASS",
+      "details": "布局正常",
+      "timestamp": "2026-04-05T09:46:56.524Z"
+    },
+    {
+      "name": "响应式-Mobile 375x667",
+      "status": "PASS",
+      "details": "布局正常",
+      "timestamp": "2026-04-05T09:46:58.816Z"
+    },
+    {
+      "name": "响应式-Small Mobile 320x568",
+      "status": "PASS",
+      "details": "布局正常",
+      "timestamp": "2026-04-05T09:47:00.796Z"
+    },
+    {
+      "name": "控制台错误检查",
+      "status": "FAIL",
+      "details": "2 个错误/警告",
+      "timestamp": "2026-04-05T09:47:06.906Z"
+    },
+    {
+      "name": "网络请求检查",
+      "status": "PASS",
+      "details": "无网络请求失败",
+      "timestamp": "2026-04-05T09:47:06.907Z"
+    }
+  ],
+  "issues": [
+    {
+      "name": "导航探索",
+      "details": "Cannot read properties of undefined (reading 'snapshot')"
+    },
+    {
+      "name": "响应式-Desktop 1920x1080",
+      "details": "page.screenshot: Timeout 10000ms exceeded.\nCall log:\n\u001b[2m  - taking page screenshot\u001b[22m\n\u001b[2m  - waiting for fonts to load...\u001b[22m\n\u001b[2m  - fonts loaded\u001b[22m\n"
+    },
+    {
+      "name": "控制台错误检查",
+      "details": "2 个错误/警告"
+    }
+  ]
+}

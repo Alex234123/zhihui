@@ -1,0 +1,7 @@
+tunnel: 569775be-fbcc-4237-9d45-a47c04c9ab4d
+credentials-file: d:\zhihui\.cloudflared-569775be.json
+
+ingress:
+  - hostname: zhihui.hercinia.com
+    service: http://127.0.0.1:3001
+  - service: http_status:404
